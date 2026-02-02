@@ -55,11 +55,31 @@ fi
 if [[ -x "${GLOBAL_BIN}/mobbin" ]]; then
   echo ""
   echo "✓ mobbin-cli installed, but your shell PATH doesn't include npm's global bin."
-  echo "Add this to your ~/.zshrc (or ~/.bashrc), then restart your terminal:"
+
+  # Best-effort: persist PATH update automatically (macOS default shell is zsh).
+  ZSHRC="$HOME/.zshrc"
+  BASHRC="$HOME/.bashrc"
+  MARK_START="# >>> mobbin-cli installer >>>"
+  MARK_END="# <<< mobbin-cli installer <<<"
+  BLOCK="${MARK_START}\n# Added by mobbin-cli installer so the 'mobbin' command is available\nexport PATH=\"${GLOBAL_BIN}:\$PATH\"\n${MARK_END}\n"
+
+  add_block() {
+    local file="$1"
+    if [[ -f "$file" ]] && grep -Fq "$MARK_START" "$file"; then
+      return 0
+    fi
+    printf "\n%s\n" "$BLOCK" >> "$file"
+  }
+
+  # Prefer zshrc; also update bashrc if it exists (some setups still use bash).
+  add_block "$ZSHRC"
+  [[ -f "$BASHRC" ]] && add_block "$BASHRC"
+
+  echo "Updated shell config to include npm global bin in PATH:"
+  echo "  ${ZSHRC}"
+  [[ -f "$BASHRC" ]] && echo "  ${BASHRC}"
   echo ""
-  echo "  export PATH=\"${GLOBAL_BIN}:\$PATH\""
-  echo ""
-  echo "Then run: mobbin --help"
+  echo "Open a NEW terminal tab (or run: source ~/.zshrc) then try: mobbin --help"
   exit 0
 fi
 
