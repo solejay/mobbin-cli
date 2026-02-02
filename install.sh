@@ -25,8 +25,12 @@ npm install
 echo "Building…"
 npm run build
 
+echo "Packaging…"
+TARBALL="$(npm pack)"
+
 echo "Installing globally…"
-npm install -g .
+# Install from the tarball so the global install COPIES files (avoids symlinks to the source dir).
+npm install -g "${TARBALL}"
 
 GLOBAL_BIN="$(npm bin -g)"
 GLOBAL_ROOT="$(npm root -g)"
