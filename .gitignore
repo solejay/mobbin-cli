@@ -2,7 +2,8 @@
 node_modules/
 
 # Builds
-/dist/
+# NOTE: we COMMIT dist/ so `npm i -g github:…` works without a build step.
+# Keep it unignored.
 
 # Logs
 npm-debug.log*

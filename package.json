@@ -7,6 +7,13 @@
   "bin": {
     "mobbin": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "bin",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx src/cli.ts",
     "build": "tsc",

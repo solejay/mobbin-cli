@@ -1,0 +1,77 @@
+import { z } from 'zod';
+export declare const ScreenCdnImgSourcesSchema: z.ZodObject<{
+    src: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    srcSet: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    downloadableSrc: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+}, z.core.$loose>;
+export declare const FetchScreensItemSchema: z.ZodObject<{
+    id: z.ZodString;
+    appName: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    platform: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    screenUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    fullpageScreenUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    screenPatterns: z.ZodNullable<z.ZodOptional<z.ZodArray<z.ZodString>>>;
+    screenElements: z.ZodNullable<z.ZodOptional<z.ZodArray<z.ZodString>>>;
+    screenCdnImgSources: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        src: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        srcSet: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        downloadableSrc: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    }, z.core.$loose>>>;
+    fullpageScreenCdnImgSources: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        src: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        srcSet: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        downloadableSrc: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    }, z.core.$loose>>>;
+}, z.core.$loose>;
+export declare const FetchScreensResponseSchema: z.ZodObject<{
+    value: z.ZodObject<{
+        data: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            appName: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            platform: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            screenUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            fullpageScreenUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            screenPatterns: z.ZodNullable<z.ZodOptional<z.ZodArray<z.ZodString>>>;
+            screenElements: z.ZodNullable<z.ZodOptional<z.ZodArray<z.ZodString>>>;
+            screenCdnImgSources: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+                src: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+                srcSet: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+                downloadableSrc: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            }, z.core.$loose>>>;
+            fullpageScreenCdnImgSources: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+                src: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+                srcSet: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+                downloadableSrc: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            }, z.core.$loose>>>;
+        }, z.core.$loose>>;
+    }, z.core.$strip>;
+}, z.core.$strip>;
+export declare const FetchScreenInfoResponseSchema: z.ZodObject<{
+    value: z.ZodObject<{
+        id: z.ZodString;
+        screenNumber: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
+        screenUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        appFullpageScreen: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+            fullpageScreenUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        }, z.core.$strip>>>;
+        appVersion: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+            app: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+                id: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+                appName: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+                platform: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+                appLogoUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            }, z.core.$strip>>>;
+        }, z.core.$strip>>>;
+        screenCdnImgSources: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+            src: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            srcSet: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            downloadableSrc: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        }, z.core.$loose>>>;
+        fullpageScreenCdnImgSources: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+            src: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            srcSet: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            downloadableSrc: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        }, z.core.$loose>>>;
+    }, z.core.$loose>;
+}, z.core.$strip>;
+//# sourceMappingURL=mobbinSchemas.d.ts.map

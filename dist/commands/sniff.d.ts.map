@@ -1,0 +1,1 @@
+{"version":3,"file":"sniff.d.ts","sourceRoot":"","sources":["../../src/commands/sniff.ts"],"names":[],"mappings":"AAOA,KAAK,YAAY,GAAG;IAClB,GAAG,CAAC,EAAE,MAAM,CAAC;IACb,QAAQ,CAAC,EAAE,OAAO,CAAC;IACnB,GAAG,CAAC,EAAE,MAAM,CAAC;IACb,SAAS,CAAC,EAAE,MAAM,CAAC;CACpB,CAAC;AAyBF,wBAAsB,QAAQ,CAAC,IAAI,EAAE,YAAY,iBA2GhD"}
