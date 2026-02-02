@@ -13,15 +13,27 @@ Scaffolded and builds. The remaining work is **endpoint discovery** for Mobbinâ€
 ### One-liner (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/solejay/mobbin-cli/main/install.sh | bash
+curl -fsSL -L https://raw.githubusercontent.com/solejay/mobbin-cli/main/install.sh | bash
 ```
 
-### Manual install from GitHub
+### Manual install
 
 ```bash
-npm i -g github:solejay/mobbin-cli
+git clone https://github.com/solejay/mobbin-cli
+cd mobbin-cli
+npm install
+npm run build
+npm install -g .
+
+# Install Playwright browser
+npx playwright install chromium
+
 mobbin --help
 ```
+
+### Troubleshooting
+
+See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
 
 ### Dev / local linking
 

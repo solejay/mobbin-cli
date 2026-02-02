@@ -1,45 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="solejay/mobbin-cli"
-PKG="github:${REPO}"
-
-say() { printf "%s\n" "$*"; }
-fail() { printf "ERROR: %s\n" "$*" >&2; exit 1; }
-
-# macOS only (per Segun)
+# macOS-only installer (per Segun)
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  fail "This installer is macOS-only. Detected: $(uname -s)"
+  echo "ERROR: This installer is macOS-only. Detected: $(uname -s)" >&2
+  exit 1
 fi
 
-# Require Node + npm
-command -v node >/dev/null 2>&1 || fail "node is required. Install Node.js (recommend: https://nodejs.org/) and re-run."
-command -v npm  >/dev/null 2>&1 || fail "npm is required (comes with Node). Install Node.js and re-run."
+echo "Installing mobbin-cli…"
 
-say "Installing mobbin-cli from ${PKG} …"
+# Clean any previous/broken installs (ENOTDIR, stale dirs)
+rm -rf "$(npm root -g)/mobbin-cli" 2>/dev/null || true
+npm uninstall -g mobbin-cli 2>/dev/null || true
 
-# Install from GitHub.
-# We intentionally disable lifecycle scripts here because npm's git-dependency preparation
-# can run scripts before deps are in place, causing flaky installs.
-# We'll run the Playwright browser install explicitly afterwards.
-npm i -g --ignore-scripts "${PKG}"
+TEMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
-# Install Playwright browser binaries using the globally-installed package location.
-GLOBAL_ROOT="$(npm root -g)"
-PW_CLI="${GLOBAL_ROOT}/mobbin-cli/node_modules/playwright/cli.js"
+git clone https://github.com/solejay/mobbin-cli.git "$TEMP_DIR/mobbin-cli"
+cd "$TEMP_DIR/mobbin-cli"
 
-if [[ -f "${PW_CLI}" ]]; then
-  say "Installing Playwright browsers… (this can take a minute)"
-  node "${PW_CLI}" install
-else
-  say "Warning: Playwright CLI not found at ${PW_CLI}. Skipping browser install."
-  say "If mobbin fails later, run: npx playwright install"
-fi
+echo "Installing dependencies…"
+npm install
+
+echo "Building…"
+npm run build
+
+echo "Installing globally…"
+npm install -g .
+
+echo "Installing Playwright chromium browser…"
+# Use npx so it resolves the installed Playwright package
+npx playwright install chromium
 
 if command -v mobbin >/dev/null 2>&1; then
-  say "Verifying install…"
-  mobbin --help >/dev/null
-  say "✅ Installed. Try: mobbin whoami"
+  echo ""
+  echo "✓ mobbin-cli installed successfully"
+  mobbin --help | head -n 3 || true
+  echo ""
+  echo "Try: mobbin login"
 else
-  fail "Install completed but 'mobbin' not found on PATH. Try restarting your terminal or check npm global bin path: npm bin -g"
+  echo ""
+  echo "✗ Installation failed: 'mobbin' not found on PATH."
+  echo "Check: npm bin -g  (and ensure it's on your PATH)"
+  exit 1
 fi
