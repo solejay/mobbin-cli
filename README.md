@@ -8,9 +8,24 @@ Playwright-assisted TypeScript CLI for searching Mobbin and downloading design i
 ## Status
 Scaffolded and builds. The remaining work is **endpoint discovery** for Mobbin’s internal search + flow + asset APIs.
 
-## Install / Link (use `mobbin` command)
+## Install (macOS)
 
-This repo is a Node CLI. The easiest way to use it locally is via `npm link`.
+### One-liner (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/solejay/mobbin-cli/main/install.sh | bash
+```
+
+### Manual install from GitHub
+
+```bash
+npm i -g github:solejay/mobbin-cli
+mobbin --help
+```
+
+### Dev / local linking
+
+If you’re hacking on the repo:
 
 ```bash
 git clone https://github.com/solejay/mobbin-cli
@@ -19,11 +34,10 @@ npm i
 npm run build
 npm link
 
-# Now you can run:
 mobbin --help
 ```
 
-### Update after pulling changes
+### Update after pulling changes (linked dev)
 
 ```bash
 cd mobbin-cli
