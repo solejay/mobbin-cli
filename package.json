@@ -12,8 +12,7 @@
     "build": "tsc",
     "start": "node dist/cli.js",
     "lint": "eslint .",
-    "format": "prettier -w .",
-    "postinstall": "node ./node_modules/playwright/cli.js install"
+    "format": "prettier -w ."
   },
   "dependencies": {
     "commander": "^14.0.1",
