@@ -28,9 +28,19 @@ npm run build
 echo "Installing globally…"
 npm install -g .
 
+GLOBAL_BIN="$(npm bin -g)"
+GLOBAL_ROOT="$(npm root -g)"
+
+echo ""
+echo "npm global bin:  ${GLOBAL_BIN}"
+echo "npm global root: ${GLOBAL_ROOT}"
+
 echo "Installing Playwright chromium browser…"
 # Use npx so it resolves the installed Playwright package
 npx playwright install chromium
+
+# Refresh shell command cache (best effort)
+hash -r 2>/dev/null || true
 
 if command -v mobbin >/dev/null 2>&1; then
   echo ""
@@ -38,9 +48,24 @@ if command -v mobbin >/dev/null 2>&1; then
   mobbin --help | head -n 3 || true
   echo ""
   echo "Try: mobbin login"
-else
-  echo ""
-  echo "✗ Installation failed: 'mobbin' not found on PATH."
-  echo "Check: npm bin -g  (and ensure it's on your PATH)"
-  exit 1
+  exit 0
 fi
+
+# If we get here, the binary likely exists but PATH doesn't include npm's global bin.
+if [[ -x "${GLOBAL_BIN}/mobbin" ]]; then
+  echo ""
+  echo "✓ mobbin-cli installed, but your shell PATH doesn't include npm's global bin."
+  echo "Add this to your ~/.zshrc (or ~/.bashrc), then restart your terminal:"
+  echo ""
+  echo "  export PATH=\"${GLOBAL_BIN}:\$PATH\""
+  echo ""
+  echo "Then run: mobbin --help"
+  exit 0
+fi
+
+echo ""
+echo "✗ Installation failed: 'mobbin' not found."
+echo "Debug:"
+echo "  ls -la \"${GLOBAL_BIN}\" | grep mobbin || true"
+exit 1
+
