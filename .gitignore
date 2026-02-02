@@ -1,0 +1,20 @@
+# Node
+node_modules/
+
+# Builds
+/dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+
+# Local scratch
+inspo-test/
+
+# Env
+.env
+.env.*
