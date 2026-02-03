@@ -26,7 +26,11 @@ echo "Building…"
 npm run build
 
 echo "Packaging…"
-TARBALL="$(npm pack)"
+TARBALL="$(npm pack | tail -n 1 | tr -d '[:space:]')"
+if [[ -z "${TARBALL}" ]]; then
+  echo "ERROR: npm pack did not produce a tarball" >&2
+  exit 1
+fi
 
 echo "Installing globally…"
 # Install from the tarball so the global install COPIES files (avoids symlinks to the source dir).
@@ -99,4 +103,3 @@ echo "✗ Installation failed: 'mobbin' not found."
 echo "Debug:"
 echo "  ls -la \"${GLOBAL_BIN}\" | grep mobbin || true"
 exit 1
-
