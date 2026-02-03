@@ -21,8 +21,8 @@ export async function cmdDownload(id, opts) {
         outDir: opts.out,
         concurrency: opts.concurrency,
         cookieHeader,
-        browserFallback: true,
-        browserHeadless: false,
+        browserFallback: opts.browserFallback,
+        browserHeadless: opts.headless,
     });
     console.log(`Downloaded to: ${res.dir}`);
     console.log(`Wrote metadata: ${res.metaPath}`);

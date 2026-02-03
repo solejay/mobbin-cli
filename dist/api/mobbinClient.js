@@ -1,6 +1,7 @@
 import { FetchScreenInfoResponseSchema, FetchScreensResponseSchema } from './mobbinSchemas.js';
 import { bestImageUrlFromSrcSet } from './srcset.js';
 import { bestBytescaleUrlFromHtml } from './htmlExtract.js';
+import { fetchWithRetry } from '../utils/http.js';
 function normalizePlatform(p) {
     const v = (p ?? '').toLowerCase();
     if (v === 'ios')
@@ -24,7 +25,7 @@ export class MobbinClient {
         return `${this.baseUrl}${path}`;
     }
     async httpJson(url, init) {
-        const res = await fetch(url, {
+        const res = await fetchWithRetry(url, {
             ...init,
             headers: {
                 ...(init?.headers ?? {}),
@@ -133,7 +134,7 @@ export class MobbinClient {
         // while the bytescale URLs tend to work.
         let bestUrl;
         try {
-            const pageRes = await fetch(`${this.baseUrl}/screens/${screenId}`, {
+            const pageRes = await fetchWithRetry(`${this.baseUrl}/screens/${screenId}`, {
                 headers: {
                     ...(this.cookieHeader ? { cookie: this.cookieHeader } : {}),
                     'user-agent': this.userAgent,

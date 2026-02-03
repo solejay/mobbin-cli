@@ -2,6 +2,7 @@ import type { Flow, Platform, ScreenAsset, SearchResult } from '../types/models.
 import { FetchScreenInfoResponseSchema, FetchScreensResponseSchema } from './mobbinSchemas.js';
 import { bestImageUrlFromSrcSet } from './srcset.js';
 import { bestBytescaleUrlFromHtml } from './htmlExtract.js';
+import { fetchWithRetry } from '../utils/http.js';
 
 export type MobbinClientOptions = {
   baseUrl?: string;
@@ -33,7 +34,7 @@ export class MobbinClient {
   }
 
   private async httpJson<T>(url: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       ...init,
       headers: {
         ...(init?.headers ?? {}),
@@ -159,7 +160,7 @@ export class MobbinClient {
     // while the bytescale URLs tend to work.
     let bestUrl: string | undefined;
     try {
-      const pageRes = await fetch(`${this.baseUrl}/screens/${screenId}`, {
+      const pageRes = await fetchWithRetry(`${this.baseUrl}/screens/${screenId}`, {
         headers: {
           ...(this.cookieHeader ? { cookie: this.cookieHeader } : {}),
           'user-agent': this.userAgent,

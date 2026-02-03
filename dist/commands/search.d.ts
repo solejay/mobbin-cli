@@ -1,5 +1,6 @@
+import type { Platform } from '../types/models.js';
 export declare function cmdSearch(query: string, opts: {
-    platform?: string;
+    platform?: Platform;
     limit?: number;
     json?: boolean;
 }): Promise<void>;

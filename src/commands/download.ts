@@ -3,7 +3,10 @@ import { cookieHeaderFromStorageState } from '../auth/cookies.js';
 import { MobbinClient } from '../api/mobbinClient.js';
 import { downloadFlow } from '../download/downloader.js';
 
-export async function cmdDownload(id: string, opts: { out: string; concurrency?: number }) {
+export async function cmdDownload(
+  id: string,
+  opts: { out: string; concurrency?: number; browserFallback?: boolean; headless?: boolean },
+) {
   if (!hasStorageState()) {
     console.error('Not logged in. Run: mobbin login');
     process.exitCode = 1;
@@ -26,8 +29,8 @@ export async function cmdDownload(id: string, opts: { out: string; concurrency?:
     outDir: opts.out,
     concurrency: opts.concurrency,
     cookieHeader,
-    browserFallback: true,
-    browserHeadless: false,
+    browserFallback: opts.browserFallback,
+    browserHeadless: opts.headless,
   });
 
   console.log(`Downloaded to: ${res.dir}`);

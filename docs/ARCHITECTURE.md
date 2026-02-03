@@ -94,7 +94,7 @@ Downloads are the most fragile part. Use a ladder:
 
 ---
 
-## Endpoint discovery (the only missing piece)
+## Endpoint discovery (most fragile piece)
 
 Mobbin likely uses either REST JSON endpoints or GraphQL. To implement `search/getFlow/listFlowAssets`, you can do this manually or via the built-in sniffer.
 
@@ -139,7 +139,7 @@ From that file we identify:
    - request payload (for GraphQL)
    - required headers (CSRF token, etc.)
 
-Then implement those in `MobbinClient`.
+Then implement or update those in `MobbinClient` as Mobbin changes.
 
 ---
 

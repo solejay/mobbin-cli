@@ -7,6 +7,12 @@ cd mobbin-cli
 npm i
 ```
 
+## Tests
+
+```bash
+npm test
+```
+
 ## Login
 
 ```bash
@@ -15,6 +21,14 @@ npm run dev -- login
 
 This opens a real browser so you can complete login + 2FA. Session cookies are saved locally.
 
+## Logout
+
+```bash
+npm run dev -- logout
+```
+
+Clears stored session data (cookies and the Playwright profile).
+
 ## Search
 
 ```bash
@@ -22,15 +36,11 @@ npm run dev -- search "fintech kyc minimal" --platform ios --limit 20
 npm run dev -- search "checkout bottom sheet" --json
 ```
 
-> Search is currently a stub until we implement Mobbin endpoint discovery.
-
 ## Download
 
 ```bash
 npm run dev -- download <id> --out ./inspo --concurrency 4
 ```
-
-> Download is currently a stub until we implement flow + asset endpoints.
 
 ## Sniff (endpoint discovery helper)
 

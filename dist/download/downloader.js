@@ -5,18 +5,19 @@ import pLimit from 'p-limit';
 import { chromium } from 'playwright';
 import { chromeProfileDir } from '../auth/profile.js';
 import { sanitizeName, ensureDir } from '../utils/fsSafe.js';
+import { fetchWithRetry } from '../utils/http.js';
 function flowDir(outDir, flow) {
-    const app = sanitizeName(flow.appName);
-    const flowName = sanitizeName(flow.flowName);
+    const app = sanitizeName(flow.appName, 'Unknown App');
+    const flowName = sanitizeName(flow.flowName, 'Unknown Flow');
     return path.join(outDir, app, flowName);
 }
 async function downloadOne(asset, destPath, cookieHeader) {
-    const res = await fetch(asset.imageUrl, {
+    const res = await fetchWithRetry(asset.imageUrl, {
         headers: {
             ...(cookieHeader ? { cookie: cookieHeader } : {}),
             accept: 'image/*,*/*;q=0.8',
         },
-    });
+    }, { timeoutMs: 30_000, retries: 1 });
     if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`Failed ${res.status} downloading ${asset.imageUrl}\n${text.slice(0, 300)}`);

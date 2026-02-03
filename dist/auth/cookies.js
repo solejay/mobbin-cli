@@ -10,6 +10,12 @@ export function cookieHeaderFromStorageState(filePath = storageStatePath()) {
     // cookie header format: "a=b; c=d"
     return cookies
         .filter((c) => c.name && typeof c.value === 'string')
+        .filter((c) => {
+        const domain = (c.domain ?? '').replace(/^\./, '').toLowerCase();
+        if (!domain)
+            return true;
+        return domain.endsWith('mobbin.com');
+    })
         .map((c) => `${c.name}=${c.value}`)
         .join('; ');
 }
