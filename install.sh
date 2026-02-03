@@ -26,7 +26,10 @@ echo "Building…"
 npm run build
 
 echo "Packaging…"
-TARBALL="$(npm pack | tail -n 1 | tr -d '[:space:]')"
+# Avoid parsing npm pack output (which can include script logs).
+rm -f ./*.tgz
+npm pack >/dev/null
+TARBALL="$(ls -t ./*.tgz 2>/dev/null | head -n 1 | tr -d '[:space:]')"
 if [[ -z "${TARBALL}" ]]; then
   echo "ERROR: npm pack did not produce a tarball" >&2
   exit 1
