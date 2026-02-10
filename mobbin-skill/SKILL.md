@@ -152,7 +152,23 @@ node mobbin-skill/scripts/gather-inspiration.mjs \
   --platform ios \
   --limit 15 \
   --out ./inspiration/mobbin/settings
+
+# Creative onboarding for logging (query expansion + diversity ranking)
+node mobbin-skill/scripts/gather-inspiration.mjs \
+  --query "Onboarding for logging" \
+  --platform web \
+  --limit 20 \
+  --out ./inspiration/mobbin/onboarding-logging \
+  --creative \
+  --creative-per-query-limit 10 \
+  --creative-max-per-app 2
 ```
+
+Creative mode notes:
+- `--creative` expands the query into related terms and merges candidates.
+- `--creative-max-per-app` enforces app diversity to avoid repetitive results.
+- `--creative-query-pack "Onboarding,Welcome,Activity Log,Journal,History"` lets you override inferred keywords.
+- Script writes `creative-searches.json` with the expanded query set, per-query hit counts, and selected scores.
 
 ## CLI reference (from `mobbin --help`)
 
