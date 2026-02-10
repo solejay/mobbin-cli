@@ -8,9 +8,9 @@ description: Collect UI inspiration for any screen type from Mobbin using the lo
 ## Preconditions
 
 - `mobbin` must be installed and on PATH (global `npm link`)
-- User must be logged in:
-  - Check: `mobbin whoami`
-  - If not logged in: `mobbin login` (interactive)
+- Session handling is automatic:
+  - `whoami`, `search`, `download`, and `benchmark-download` auto-run `mobbin login` when session is expired.
+  - For unattended runs, login first to avoid interactive pauses: `mobbin login`
 
 ## Parameters
 
@@ -22,6 +22,9 @@ When the user requests Mobbin inspiration, identify:
 | `platform` | `ios` | Target platform: `ios`, `android`, or `web` |
 | `limit` | `15` | Number of results to fetch |
 | `outputDir` | `./inspiration/mobbin/<screenType>` | Where to save downloaded screens |
+| `downloadConcurrency` | `8` | Concurrency passed to `mobbin download` (future-proof; useful as flow support expands) |
+| `downloadTimeoutMs` | `15000` | Direct image request timeout before browser fallback |
+| `downloadRetries` | `1` | Direct image request retries |
 
 ## Common screen types
 
@@ -42,6 +45,8 @@ When the user requests Mobbin inspiration, identify:
 ```bash
 mobbin whoami
 ```
+
+Note: if the stored session is expired, this command will automatically launch `mobbin login` and continue.
 
 2) Search for screens (replace `<screenType>` with user's request)
 
@@ -69,14 +74,30 @@ mobbin search "Empty State" --platform ios --limit 15 --json > results.json
 - For each `id` in `results.json`, run:
 
 ```bash
-mobbin download <screenId> --out ./inspiration/mobbin/<screenType>
+mobbin download <screenId> \
+  --out ./inspiration/mobbin/<screenType> \
+  --concurrency 8 \
+  --timeout-ms 15000 \
+  --retries 1 \
+  --profile
 ```
 
 Notes:
 - `mobbin download` takes the search result/flow id (not a screenshot id).
 - `mobbin download` creates per-app folders automatically.
+- `--profile` prints timing stats per download run; keep it on during collection for visibility.
 - Prefer continuing on failures (retry once; then log).
 - Use lowercase, hyphenated folder names (e.g., `empty-state`, `sign-up`)
+
+Optional: tune concurrency first with benchmark mode (especially for larger collections):
+
+```bash
+mobbin benchmark-download <screenId> \
+  --out ./tmp/bench \
+  --concurrency-list 4,8,12,16 \
+  --runs 2 \
+  --repeat 24
+```
 
 4) Create an index markdown
 
@@ -109,7 +130,7 @@ Key observations to note per screen type:
 Use the bundled script for automated runs:
 
 ```bash
-node skills/mobbin-skill/scripts/gather-inspiration.mjs \
+node mobbin-skill/scripts/gather-inspiration.mjs \
   --query "<screenType>" \
   --platform ios \
   --limit 15 \
@@ -119,14 +140,14 @@ node skills/mobbin-skill/scripts/gather-inspiration.mjs \
 Examples:
 ```bash
 # Onboarding inspiration
-node skills/mobbin-skill/scripts/gather-inspiration.mjs \
+node mobbin-skill/scripts/gather-inspiration.mjs \
   --query "Onboarding" \
   --platform ios \
   --limit 15 \
   --out ./inspiration/mobbin/onboarding
 
 # Settings inspiration
-node skills/mobbin-skill/scripts/gather-inspiration.mjs \
+node mobbin-skill/scripts/gather-inspiration.mjs \
   --query "Settings" \
   --platform ios \
   --limit 15 \
@@ -139,6 +160,18 @@ Search syntax:
 
 ```bash
 mobbin search <query> --platform ios|android|web --limit <n> --json
+```
+
+Download syntax (efficient profile):
+
+```bash
+mobbin download <id> --out <dir> --concurrency 8 --timeout-ms 15000 --retries 1 --profile
+```
+
+Benchmark syntax:
+
+```bash
+mobbin benchmark-download <id> --out <dir> --concurrency-list 4,8,12,16 --runs 2 --repeat 24
 ```
 
 ## Output conventions
@@ -163,7 +196,8 @@ done
 
 ## If it fails
 
-- If `mobbin download` fails due to asset URLs: ensure your linked version includes the 3-dot menu → "Download png" Playwright fallback.
+- If commands report session/auth issues, rerun once and complete interactive login when prompted.
+- If `mobbin download` fails due to asset URLs: ensure your linked version includes direct URL ranking + 3-dot menu → "Download png" browser fallback.
 - Rebuild/relink the CLI if needed:
 
 ```bash

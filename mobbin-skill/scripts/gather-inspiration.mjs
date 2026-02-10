@@ -5,7 +5,17 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 function parseArgs(argv) {
-  const out = { query: null, platform: 'ios', limit: 15, outDir: null, resume: true };
+  const out = {
+    query: null,
+    platform: 'ios',
+    limit: 15,
+    outDir: null,
+    resume: true,
+    downloadConcurrency: 8,
+    downloadTimeoutMs: 15000,
+    downloadRetries: 1,
+    downloadProfile: true,
+  };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     const next = argv[i + 1];
@@ -13,10 +23,15 @@ function parseArgs(argv) {
     else if (a === '--platform' && next) (out.platform = next), i++;
     else if (a === '--limit' && next) (out.limit = Number(next)), i++;
     else if (a === '--out' && next) (out.outDir = next), i++;
+    else if (a === '--download-concurrency' && next) (out.downloadConcurrency = Number(next)), i++;
+    else if (a === '--download-timeout-ms' && next) (out.downloadTimeoutMs = Number(next)), i++;
+    else if (a === '--download-retries' && next) (out.downloadRetries = Number(next)), i++;
+    else if (a === '--no-download-profile') out.downloadProfile = false;
     else if (a === '--no-resume') out.resume = false;
     else if (a === '--help') {
       console.log(`Usage:
   gather-inspiration.mjs --query "<screenType>" --platform ios --limit 15 --out ./inspiration/mobbin/<screenType> [--no-resume]
+    [--download-concurrency 8] [--download-timeout-ms 15000] [--download-retries 1] [--no-download-profile]
 
 Examples:
   gather-inspiration.mjs --query "Login" --platform ios --limit 15 --out ./inspiration/mobbin/login
@@ -48,6 +63,19 @@ Common screen types:
   if (!out.outDir) {
     const slug = out.query.toLowerCase().replace(/\s+/g, '-');
     out.outDir = `./inspiration/mobbin/${slug}`;
+  }
+
+  if (!Number.isInteger(out.downloadConcurrency) || out.downloadConcurrency <= 0) {
+    console.error('Error: --download-concurrency must be a positive integer.');
+    process.exit(1);
+  }
+  if (!Number.isInteger(out.downloadTimeoutMs) || out.downloadTimeoutMs <= 0) {
+    console.error('Error: --download-timeout-ms must be a positive integer.');
+    process.exit(1);
+  }
+  if (!Number.isInteger(out.downloadRetries) || out.downloadRetries < 0) {
+    console.error('Error: --download-retries must be a non-negative integer.');
+    process.exit(1);
   }
 
   return out;
@@ -122,6 +150,22 @@ function writeIndex(outDir, screenType, rows, failures) {
   fs.writeFileSync(path.join(outDir, 'INDEX.md'), lines.join('\n') + '\n', 'utf8');
 }
 
+function buildDownloadArgs(id, args) {
+  return [
+    'download',
+    id,
+    '--out',
+    args.outDir,
+    '--concurrency',
+    String(args.downloadConcurrency),
+    '--timeout-ms',
+    String(args.downloadTimeoutMs),
+    '--retries',
+    String(args.downloadRetries),
+    ...(args.downloadProfile ? ['--profile'] : []),
+  ];
+}
+
 const args = parseArgs(process.argv);
 ensureDir(args.outDir);
 
@@ -129,6 +173,9 @@ console.log(`Collecting ${args.query} inspiration...`);
 console.log(`Platform: ${args.platform}, Limit: ${args.limit}`);
 console.log(`Output: ${args.outDir}`);
 console.log(`Resume: ${args.resume ? 'on' : 'off'}`);
+console.log(
+  `Download profile: c=${args.downloadConcurrency}, timeout=${args.downloadTimeoutMs}ms, retries=${args.downloadRetries}, profile=${args.downloadProfile ? 'on' : 'off'}`,
+);
 console.log('');
 
 // 1) Auth check
@@ -195,7 +242,7 @@ for (const r of results) {
   let downloadedTo = '';
   try {
     // capture stdout to parse the output directory
-    const out = sh('mobbin', ['download', id, '--out', args.outDir]);
+    const out = sh('mobbin', buildDownloadArgs(id, args));
     const m = out.match(/Downloaded to:\s*(.+)$/m);
     downloadedTo = m?.[1]?.trim() ?? '';
 
@@ -215,7 +262,7 @@ for (const r of results) {
   } catch (e) {
     // retry once
     try {
-      const out = sh('mobbin', ['download', id, '--out', args.outDir]);
+      const out = sh('mobbin', buildDownloadArgs(id, args));
       const m = out.match(/Downloaded to:\s*(.+)$/m);
       downloadedTo = m?.[1]?.trim() ?? '';
       const pngPath = downloadedTo ? path.join(downloadedTo, '01.png') : '';
