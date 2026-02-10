@@ -159,13 +159,22 @@ node mobbin-skill/scripts/gather-inspiration.mjs \
   --platform web \
   --limit 20 \
   --out ./inspiration/mobbin/onboarding-logging \
-  --creative \
   --creative-per-query-limit 10 \
   --creative-max-per-app 2
+
+# Exact (non-creative) query when you need strict matching
+node mobbin-skill/scripts/gather-inspiration.mjs \
+  --query "Onboarding" \
+  --platform ios \
+  --limit 10 \
+  --out ./inspiration/mobbin/onboarding-exact \
+  --no-creative
 ```
 
 Creative mode notes:
-- `--creative` expands the query into related terms and merges candidates.
+- Creative mode is enabled by default.
+- `--creative` explicitly enables creative mode (usually unnecessary).
+- `--no-creative` disables expansion and uses strict single-query search.
 - `--creative-max-per-app` enforces app diversity to avoid repetitive results.
 - `--creative-query-pack "Onboarding,Welcome,Activity Log,Journal,History"` lets you override inferred keywords.
 - Script writes `creative-searches.json` with the expanded query set, per-query hit counts, and selected scores.

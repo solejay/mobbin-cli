@@ -15,7 +15,7 @@ function parseArgs(argv) {
     downloadTimeoutMs: 15000,
     downloadRetries: 1,
     downloadProfile: true,
-    creative: false,
+    creative: true,
     creativePerQueryLimit: 10,
     creativeMaxPerApp: 2,
     creativeQueryPack: null,
@@ -32,6 +32,7 @@ function parseArgs(argv) {
     else if (a === '--download-retries' && next) (out.downloadRetries = Number(next)), i++;
     else if (a === '--no-download-profile') out.downloadProfile = false;
     else if (a === '--creative') out.creative = true;
+    else if (a === '--no-creative') out.creative = false;
     else if (a === '--creative-per-query-limit' && next) (out.creativePerQueryLimit = Number(next)), i++;
     else if (a === '--creative-max-per-app' && next) (out.creativeMaxPerApp = Number(next)), i++;
     else if (a === '--creative-query-pack' && next) (out.creativeQueryPack = next), i++;
@@ -40,7 +41,7 @@ function parseArgs(argv) {
       console.log(`Usage:
   gather-inspiration.mjs --query "<screenType>" --platform ios --limit 15 --out ./inspiration/mobbin/<screenType> [--no-resume]
     [--download-concurrency 8] [--download-timeout-ms 15000] [--download-retries 1] [--no-download-profile]
-    [--creative] [--creative-per-query-limit 10] [--creative-max-per-app 2]
+    [--creative|--no-creative] [--creative-per-query-limit 10] [--creative-max-per-app 2]
     [--creative-query-pack "Onboarding,Welcome,Product Tour"]
 
 Examples:
@@ -48,7 +49,8 @@ Examples:
   gather-inspiration.mjs --query "Onboarding" --platform ios --limit 20 --out ./inspiration/mobbin/onboarding
   gather-inspiration.mjs --query "Settings" --platform android --limit 10 --out ./inspiration/mobbin/settings
   gather-inspiration.mjs --query "Empty State" --platform ios --limit 15 --out ./inspiration/mobbin/empty-state
-  gather-inspiration.mjs --query "Onboarding for logging" --platform web --limit 20 --out ./inspiration/mobbin/onboarding-logging --creative
+  gather-inspiration.mjs --query "Onboarding for logging" --platform web --limit 20 --out ./inspiration/mobbin/onboarding-logging
+  gather-inspiration.mjs --query "Onboarding" --platform ios --limit 10 --out ./inspiration/mobbin/onboarding-exact --no-creative
 
 Common screen types:
   - Authentication: Login, Sign Up, Forgot Password, OTP, SSO
