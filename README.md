@@ -32,6 +32,12 @@ mobbin search "login" --limit 10
 
 # Download assets for a screen id
 mobbin download <id> --out ./mobbin-downloads
+
+# Benchmark download performance across concurrency values
+mobbin benchmark-download <id> --out ./bench --concurrency-list 2,4,6,8 --runs 2 --repeat 8
 ```
+
+If your saved Mobbin session expires, `whoami`, `search`, `download`, and `benchmark-download`
+automatically run the login flow and then continue.
 
 Troubleshooting: see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).

@@ -2,6 +2,7 @@ import type { Flow, Platform, ScreenAsset, SearchResult } from '../types/models.
 import { FetchScreenInfoResponseSchema, FetchScreensResponseSchema } from './mobbinSchemas.js';
 import { bestImageUrlFromSrcSet } from './srcset.js';
 import { bestBytescaleUrlFromHtml } from './htmlExtract.js';
+import { isHighConfidenceImageUrl, pickBestImageUrl } from './imageUrls.js';
 import { fetchWithRetry } from '../utils/http.js';
 
 export type MobbinClientOptions = {
@@ -135,8 +136,8 @@ export class MobbinClient {
     const screenId = flow.screens[0]?.id;
     if (!screenId) return [];
 
-    // 1) Try internal API (may return supabase URLs which sometimes 404).
-    let fallbackUrl: string | undefined;
+    // 1) Try internal API first.
+    let apiBestUrl: string | undefined;
     try {
       const raw = await this.httpJson(this.apiUrl('/api/screen/fetch-screen-info'), {
         method: 'POST',
@@ -146,37 +147,54 @@ export class MobbinClient {
 
       const parsed = FetchScreenInfoResponseSchema.parse(raw);
 
-      fallbackUrl =
-        bestImageUrlFromSrcSet(
-          parsed.value.fullpageScreenCdnImgSources?.srcSet ?? parsed.value.screenCdnImgSources?.srcSet,
-          parsed.value.appFullpageScreen?.fullpageScreenUrl ?? parsed.value.screenUrl ?? undefined,
-        ) ?? parsed.value.screenUrl ?? undefined;
+      apiBestUrl = pickBestImageUrl([
+        parsed.value.fullpageScreenCdnImgSources?.downloadableSrc,
+        parsed.value.screenCdnImgSources?.downloadableSrc,
+        bestImageUrlFromSrcSet(parsed.value.fullpageScreenCdnImgSources?.srcSet, undefined),
+        bestImageUrlFromSrcSet(parsed.value.screenCdnImgSources?.srcSet, undefined),
+        parsed.value.appFullpageScreen?.fullpageScreenUrl ?? undefined,
+        parsed.value.screenUrl ?? undefined,
+      ]);
     } catch {
       // ignore
     }
 
-    // 2) Prefer bytescale CDN URL scraped from the screen page.
-    // Mobbin’s supabase public bucket URLs can return "Bucket not found" for some assets,
-    // while the bytescale URLs tend to work.
-    let bestUrl: string | undefined;
-    try {
-      const pageRes = await fetchWithRetry(`${this.baseUrl}/screens/${screenId}`, {
-        headers: {
-          ...(this.cookieHeader ? { cookie: this.cookieHeader } : {}),
-          'user-agent': this.userAgent,
-          accept: 'text/html,*/*',
+    // If API already returned a strong bytescale URL, skip HTML scraping for faster downloads.
+    if (isHighConfidenceImageUrl(apiBestUrl)) {
+      return [
+        {
+          screenId,
+          index: 1,
+          title: flow.screens[0]?.title,
+          imageUrl: apiBestUrl,
         },
-      });
-      if (pageRes.ok) {
-        const html = await pageRes.text();
-        bestUrl = bestBytescaleUrlFromHtml(html) ?? fallbackUrl;
-      } else {
-        bestUrl = fallbackUrl;
-      }
-    } catch {
-      bestUrl = fallbackUrl;
+      ];
     }
 
+    // 2) Otherwise, try bytescale URL from screen HTML and combine both candidates.
+    let htmlBestUrl: string | undefined;
+    try {
+      const pageRes = await fetchWithRetry(
+        `${this.baseUrl}/screens/${screenId}`,
+        {
+          headers: {
+            ...(this.cookieHeader ? { cookie: this.cookieHeader } : {}),
+            'user-agent': this.userAgent,
+            accept: 'text/html,*/*',
+          },
+        },
+        { timeoutMs: 15_000, retries: 0 },
+      );
+
+      if (pageRes.ok) {
+        const html = await pageRes.text();
+        htmlBestUrl = bestBytescaleUrlFromHtml(html);
+      }
+    } catch {
+      // ignore
+    }
+
+    const bestUrl = pickBestImageUrl([htmlBestUrl, apiBestUrl]);
     if (!bestUrl) return [];
 
     return [

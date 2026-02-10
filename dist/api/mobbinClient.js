@@ -1,6 +1,7 @@
 import { FetchScreenInfoResponseSchema, FetchScreensResponseSchema } from './mobbinSchemas.js';
 import { bestImageUrlFromSrcSet } from './srcset.js';
 import { bestBytescaleUrlFromHtml } from './htmlExtract.js';
+import { isHighConfidenceImageUrl, pickBestImageUrl } from './imageUrls.js';
 import { fetchWithRetry } from '../utils/http.js';
 function normalizePlatform(p) {
     const v = (p ?? '').toLowerCase();
@@ -114,8 +115,8 @@ export class MobbinClient {
         const screenId = flow.screens[0]?.id;
         if (!screenId)
             return [];
-        // 1) Try internal API (may return supabase URLs which sometimes 404).
-        let fallbackUrl;
+        // 1) Try internal API first.
+        let apiBestUrl;
         try {
             const raw = await this.httpJson(this.apiUrl('/api/screen/fetch-screen-info'), {
                 method: 'POST',
@@ -123,16 +124,31 @@ export class MobbinClient {
                 body: JSON.stringify({ screenId }),
             });
             const parsed = FetchScreenInfoResponseSchema.parse(raw);
-            fallbackUrl =
-                bestImageUrlFromSrcSet(parsed.value.fullpageScreenCdnImgSources?.srcSet ?? parsed.value.screenCdnImgSources?.srcSet, parsed.value.appFullpageScreen?.fullpageScreenUrl ?? parsed.value.screenUrl ?? undefined) ?? parsed.value.screenUrl ?? undefined;
+            apiBestUrl = pickBestImageUrl([
+                parsed.value.fullpageScreenCdnImgSources?.downloadableSrc,
+                parsed.value.screenCdnImgSources?.downloadableSrc,
+                bestImageUrlFromSrcSet(parsed.value.fullpageScreenCdnImgSources?.srcSet, undefined),
+                bestImageUrlFromSrcSet(parsed.value.screenCdnImgSources?.srcSet, undefined),
+                parsed.value.appFullpageScreen?.fullpageScreenUrl ?? undefined,
+                parsed.value.screenUrl ?? undefined,
+            ]);
         }
         catch {
             // ignore
         }
-        // 2) Prefer bytescale CDN URL scraped from the screen page.
-        // Mobbin’s supabase public bucket URLs can return "Bucket not found" for some assets,
-        // while the bytescale URLs tend to work.
-        let bestUrl;
+        // If API already returned a strong bytescale URL, skip HTML scraping for faster downloads.
+        if (isHighConfidenceImageUrl(apiBestUrl)) {
+            return [
+                {
+                    screenId,
+                    index: 1,
+                    title: flow.screens[0]?.title,
+                    imageUrl: apiBestUrl,
+                },
+            ];
+        }
+        // 2) Otherwise, try bytescale URL from screen HTML and combine both candidates.
+        let htmlBestUrl;
         try {
             const pageRes = await fetchWithRetry(`${this.baseUrl}/screens/${screenId}`, {
                 headers: {
@@ -140,18 +156,16 @@ export class MobbinClient {
                     'user-agent': this.userAgent,
                     accept: 'text/html,*/*',
                 },
-            });
+            }, { timeoutMs: 15_000, retries: 0 });
             if (pageRes.ok) {
                 const html = await pageRes.text();
-                bestUrl = bestBytescaleUrlFromHtml(html) ?? fallbackUrl;
-            }
-            else {
-                bestUrl = fallbackUrl;
+                htmlBestUrl = bestBytescaleUrlFromHtml(html);
             }
         }
         catch {
-            bestUrl = fallbackUrl;
+            // ignore
         }
+        const bestUrl = pickBestImageUrl([htmlBestUrl, apiBestUrl]);
         if (!bestUrl)
             return [];
         return [

@@ -5,6 +5,7 @@ import { cmdLogin } from './commands/login.js';
 import { cmdWhoami } from './commands/whoami.js';
 import { cmdSearch } from './commands/search.js';
 import { cmdDownload } from './commands/download.js';
+import { cmdBenchmarkDownload } from './commands/benchmarkDownload.js';
 import { cmdSniff } from './commands/sniff.js';
 import { cmdLogout } from './commands/logout.js';
 import type { Platform } from './types/models.js';
@@ -37,6 +38,38 @@ function parsePositiveInt(label: string) {
       throw new Error(`Invalid ${label}: ${v} (expected a positive integer)`);
     }
     return n;
+  };
+}
+
+function parseNonNegativeInt(label: string) {
+  return (v: string) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+      throw new Error(`Invalid ${label}: ${v} (expected a non-negative integer)`);
+    }
+    return n;
+  };
+}
+
+function parsePositiveIntList(label: string) {
+  return (v: string) => {
+    const values = v
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => {
+        const n = Number(item);
+        if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+          throw new Error(`Invalid ${label}: ${v} (expected comma-separated positive integers)`);
+        }
+        return n;
+      });
+
+    if (!values.length) {
+      throw new Error(`Invalid ${label}: ${v} (expected comma-separated positive integers)`);
+    }
+
+    return [...new Set(values)];
   };
 }
 
@@ -100,14 +133,61 @@ program
   .requiredOption('--out <dir>', 'Output directory')
   .option('--concurrency <n>', 'Download concurrency', parsePositiveInt('concurrency'))
   .option(
+    '--timeout-ms <n>',
+    'Direct image-request timeout in ms before fallback',
+    parsePositiveInt('timeout-ms'),
+  )
+  .option('--retries <n>', 'Direct image-request retries', parseNonNegativeInt('retries'))
+  .option(
     '--headless [boolean]',
     'Run fallback browser headless (true/false; omit value to mean true)',
     parseBooleanFlag,
     true,
   )
   .option('--browser-fallback', 'Enable browser fallback when direct download fails', true)
+  .option('--profile', 'Print download timing summary', false)
   .action(async (id, opts) => {
     await cmdDownload(id, opts);
+  });
+
+program
+  .command('benchmark-download')
+  .description('Benchmark download performance across different concurrency values.')
+  .argument('<id>', 'Result/flow id')
+  .requiredOption('--out <dir>', 'Output directory for benchmark runs')
+  .option(
+    '--concurrency-list <list>',
+    'Comma-separated concurrency values (e.g. 2,4,6,8)',
+    parsePositiveIntList('concurrency-list'),
+    [2, 4, 6, 8],
+  )
+  .option('--runs <n>', 'Runs per concurrency value', parsePositiveInt('runs'), 1)
+  .option(
+    '--repeat <n>',
+    'Benchmark asset count (duplicates assets if needed; useful while flow support is single-screen)',
+    parsePositiveInt('repeat'),
+    8,
+  )
+  .option(
+    '--timeout-ms <n>',
+    'Direct image-request timeout in ms before fallback',
+    parsePositiveInt('timeout-ms'),
+  )
+  .option('--retries <n>', 'Direct image-request retries', parseNonNegativeInt('retries'))
+  .option(
+    '--force-fallback',
+    'Skip direct image requests and benchmark browser fallback path only',
+  )
+  .option(
+    '--headless [boolean]',
+    'Run fallback browser headless (true/false; omit value to mean true)',
+    parseBooleanFlag,
+    true,
+  )
+  .option('--browser-fallback', 'Enable browser fallback when direct download fails', true)
+  .option('--json', 'Print benchmark results as JSON', false)
+  .action(async (id, opts) => {
+    await cmdBenchmarkDownload(id, opts);
   });
 
 program

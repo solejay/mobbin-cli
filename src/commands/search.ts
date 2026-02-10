@@ -1,6 +1,6 @@
 import { hasStorageState } from '../auth/storageState.js';
-import { cookieHeaderFromStorageState } from '../auth/cookies.js';
 import { MobbinClient } from '../api/mobbinClient.js';
+import { ensureValidCookieHeader } from '../auth/session.js';
 import type { Platform } from '../types/models.js';
 
 export async function cmdSearch(
@@ -13,7 +13,13 @@ export async function cmdSearch(
     return;
   }
 
-  const cookieHeader = cookieHeaderFromStorageState();
+  const cookieHeader = await ensureValidCookieHeader({ commandName: 'search' });
+  if (!cookieHeader) {
+    console.error('Not logged in. Run: mobbin login');
+    process.exitCode = 1;
+    return;
+  }
+
   const client = new MobbinClient({ cookieHeader });
 
   const results = await client.search(query, {

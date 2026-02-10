@@ -1,23 +1,32 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import pLimit from 'p-limit';
 import { chromium } from 'playwright';
 import { chromeProfileDir } from '../auth/profile.js';
 import { sanitizeName, ensureDir } from '../utils/fsSafe.js';
 import { fetchWithRetry } from '../utils/http.js';
+const DEFAULT_DIRECT_DOWNLOAD_TIMEOUT_MS = 15_000;
+const DEFAULT_DIRECT_DOWNLOAD_RETRIES = 1;
 function flowDir(outDir, flow) {
     const app = sanitizeName(flow.appName, 'Unknown App');
     const flowName = sanitizeName(flow.flowName, 'Unknown Flow');
     return path.join(outDir, app, flowName);
 }
-async function downloadOne(asset, destPath, cookieHeader) {
+async function downloadOne(asset, destPath, cookieHeader, opts) {
     const res = await fetchWithRetry(asset.imageUrl, {
         headers: {
             ...(cookieHeader ? { cookie: cookieHeader } : {}),
             accept: 'image/*,*/*;q=0.8',
         },
-    }, { timeoutMs: 30_000, retries: 1 });
+    }, {
+        timeoutMs: opts.timeoutMs,
+        retries: opts.retries,
+        retryDelayMs: 250,
+        maxRetryDelayMs: 1_000,
+    });
     if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`Failed ${res.status} downloading ${asset.imageUrl}\n${text.slice(0, 300)}`);
@@ -32,8 +41,8 @@ async function downloadOne(asset, destPath, cookieHeader) {
     const file = fs.createWriteStream(destPath);
     if (!res.body)
         throw new Error('No response body');
-    // Node 18+ can convert WebStreams → Node streams
-    const nodeReadable = (await import('node:stream')).Readable.fromWeb(res.body);
+    // Node can convert WebStreams -> Node streams for zero-copy-ish piping.
+    const nodeReadable = Readable.fromWeb(res.body);
     await pipeline(nodeReadable, file);
 }
 async function dismissOverlays(page) {
@@ -68,7 +77,6 @@ async function clickDownloadAsPng(page) {
         .locator('xpath=ancestor::button[1]');
     await moreBtn.waitFor({ state: 'attached', timeout: 15_000 });
     await moreBtn.click({ force: true, timeout: 10_000 });
-    await page.waitForTimeout(200);
     // Menu items are Radix-based. Use role or data-radix as fallback.
     const itemByRole = page.locator('[role="menuitem"]').filter({ hasText: label }).first();
     const itemByRadix = page
@@ -83,28 +91,15 @@ async function clickDownloadAsPng(page) {
     ]);
     return dl;
 }
-async function downloadViaBrowser(ctx, asset, destPath) {
+async function downloadViaBrowser(page, asset, destPath) {
     ensureDir(path.dirname(destPath));
-    const page = await ctx.newPage();
-    try {
-        await page.goto(`https://mobbin.com/screens/${asset.screenId}`, { waitUntil: 'domcontentloaded' });
-        // Let the client-rendered UI settle (icons/actions often appear after hydration).
-        try {
-            await page.waitForLoadState('networkidle', { timeout: 15_000 });
-        }
-        catch {
-            // ignore
-        }
-        await page.waitForTimeout(1500);
-        const download = await clickDownloadAsPng(page);
-        // Force filename to our convention.
-        await download.saveAs(destPath);
-    }
-    finally {
-        await page.close().catch(() => undefined);
-    }
+    await page.goto(`https://mobbin.com/screens/${asset.screenId}`, { waitUntil: 'domcontentloaded' });
+    const download = await clickDownloadAsPng(page);
+    // Force filename to our convention.
+    await download.saveAs(destPath);
 }
 export async function downloadFlow(flow, assets, opts) {
+    const startedAt = performance.now();
     const dir = flowDir(opts.outDir, flow);
     ensureDir(dir);
     const metaPath = path.join(dir, 'meta.json');
@@ -123,49 +118,174 @@ export async function downloadFlow(flow, assets, opts) {
     }, null, 2), 'utf-8');
     const browserFallback = opts.browserFallback ?? true;
     const browserHeadless = opts.browserHeadless ?? true;
+    const concurrency = opts.concurrency ?? 8;
+    const forceBrowserFallback = opts.forceBrowserFallback ?? false;
+    const fallbackConcurrency = opts.fallbackConcurrency ??
+        (forceBrowserFallback ? Math.max(1, Math.min(concurrency, 3)) : 1);
+    const directTimeoutMs = opts.directTimeoutMs ?? DEFAULT_DIRECT_DOWNLOAD_TIMEOUT_MS;
+    const directRetries = opts.directRetries ?? DEFAULT_DIRECT_DOWNLOAD_RETRIES;
+    let directAttempts = 0;
+    let directSuccess = 0;
+    let browserFallbackSuccess = 0;
+    let failed = 0;
+    let directMs = 0;
+    let browserFallbackMs = 0;
+    let assetElapsedMs = 0;
     // We'll only spin up Playwright if we actually need it.
     let browserCtx = null;
+    let browser = null;
+    let browserPage = null;
     const getBrowserCtx = async () => {
         if (browserCtx)
             return browserCtx;
-        // Use installed Google Chrome + persistent profile (inherits logged-in state)
-        browserCtx = await chromium.launchPersistentContext(chromeProfileDir(), {
+        const launchPersistent = async () => chromium.launchPersistentContext(chromeProfileDir(), {
             headless: browserHeadless,
             channel: 'chrome',
             args: ['--disable-blink-features=AutomationControlled'],
             acceptDownloads: true,
         });
+        try {
+            // Prefer persistent profile to preserve the most realistic logged-in browser state.
+            browserCtx = await launchPersistent();
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isProfileLock = msg.includes('ProcessSingleton') || msg.includes('SingletonLock');
+            if (!isProfileLock || !opts.storageStatePath)
+                throw err;
+            // Profile is in use: fall back to an isolated context backed by saved storageState.
+            browser = await chromium.launch({
+                headless: browserHeadless,
+                channel: 'chrome',
+                args: ['--disable-blink-features=AutomationControlled'],
+            });
+            browserCtx = await browser.newContext({
+                storageState: opts.storageStatePath,
+                acceptDownloads: true,
+            });
+        }
         return browserCtx;
     };
-    // Normal downloads can be concurrent; browser-fallback should be serialized.
-    const limit = pLimit(opts.concurrency ?? 4);
-    const browserLimit = pLimit(1);
+    const getBrowserPage = async () => {
+        if (browserPage)
+            return browserPage;
+        const ctx = await getBrowserCtx();
+        browserPage = await ctx.newPage();
+        return browserPage;
+    };
+    const withBrowserPage = async (fn) => {
+        const ctx = await getBrowserCtx();
+        if (fallbackConcurrency === 1) {
+            const page = await getBrowserPage();
+            return await fn(page);
+        }
+        const page = await ctx.newPage();
+        try {
+            return await fn(page);
+        }
+        finally {
+            await page.close().catch(() => undefined);
+        }
+    };
+    // Normal downloads can be concurrent. Browser fallback defaults to serialized,
+    // but can fan out when forcing fallback benchmarks.
+    const limit = pLimit(concurrency);
+    const browserLimit = pLimit(Math.max(1, fallbackConcurrency));
     const jobs = assets.map((a) => limit(async () => {
         const fileName = `${String(a.index).padStart(2, '0')}.png`;
         const dest = path.join(dir, fileName);
+        const assetStart = performance.now();
         try {
-            await downloadOne(a, dest, opts.cookieHeader);
-            return dest;
-        }
-        catch (err) {
-            if (!browserFallback)
-                throw err;
+            if (forceBrowserFallback) {
+                if (!browserFallback) {
+                    failed += 1;
+                    throw new Error('forceBrowserFallback=true requires browserFallback=true');
+                }
+                return await browserLimit(async () => {
+                    const fallbackStart = performance.now();
+                    try {
+                        await withBrowserPage((page) => downloadViaBrowser(page, a, dest));
+                        browserFallbackSuccess += 1;
+                        return dest;
+                    }
+                    catch (err) {
+                        failed += 1;
+                        throw err;
+                    }
+                    finally {
+                        browserFallbackMs += performance.now() - fallbackStart;
+                    }
+                });
+            }
+            directAttempts += 1;
+            let directErr;
+            const directStart = performance.now();
+            try {
+                await downloadOne(a, dest, opts.cookieHeader, {
+                    timeoutMs: directTimeoutMs,
+                    retries: directRetries,
+                });
+                directSuccess += 1;
+                return dest;
+            }
+            catch (err) {
+                directErr = err;
+            }
+            finally {
+                directMs += performance.now() - directStart;
+            }
+            if (!browserFallback) {
+                failed += 1;
+                throw directErr;
+            }
             // Fallback: drive the UI "Download as PNG".
             return await browserLimit(async () => {
-                const ctx = await getBrowserCtx();
-                await downloadViaBrowser(ctx, a, dest);
-                return dest;
+                const fallbackStart = performance.now();
+                try {
+                    await withBrowserPage((page) => downloadViaBrowser(page, a, dest));
+                    browserFallbackSuccess += 1;
+                    return dest;
+                }
+                catch (err) {
+                    failed += 1;
+                    throw err;
+                }
+                finally {
+                    browserFallbackMs += performance.now() - fallbackStart;
+                }
             });
+        }
+        finally {
+            assetElapsedMs += performance.now() - assetStart;
         }
     }));
     try {
         const files = await Promise.all(jobs);
-        return { dir, files, metaPath };
+        const totalMs = performance.now() - startedAt;
+        const stats = {
+            assetCount: assets.length,
+            concurrency,
+            fallbackConcurrency,
+            directTimeoutMs,
+            directRetries,
+            forceBrowserFallback,
+            totalMs,
+            directAttempts,
+            directSuccess,
+            browserFallbackSuccess,
+            failed,
+            directMs,
+            browserFallbackMs,
+            avgAssetMs: assets.length ? assetElapsedMs / assets.length : 0,
+        };
+        return { dir, files, metaPath, stats };
     }
     finally {
         // TS quirk: in some build setups BrowserContext can be inferred oddly; runtime Playwright context does have .close().
         if (browserCtx)
             await browserCtx.close().catch(() => undefined);
+        if (browser)
+            await browser.close().catch(() => undefined);
     }
 }
 //# sourceMappingURL=downloader.js.map
