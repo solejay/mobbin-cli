@@ -10,6 +10,7 @@ import { registerAuthCommands } from './commands_new/auth.js';
 import { registerShotsCommands } from './commands_new/shots.js';
 import { registerConfigCommands } from './commands_new/config.js';
 import { registerAppScreensCommands } from './commands_new/appScreens.js';
+import { maybeAutoUpdate } from './update/selfUpdate.js';
 
 const program = new Command();
 
@@ -90,7 +91,8 @@ program
   .name('mobbin')
   .description('Mobbin CLI (Playwright-assisted)')
   .version(readPackageVersion())
-  .option('--debug', 'Show stack traces for errors', false);
+  .option('--debug', 'Show stack traces for errors', false)
+  .option('--no-update-check', 'Skip startup update check', false);
 
 // New grouped command UX (gogcli-inspired)
 registerAuthCommands(program);
@@ -223,6 +225,9 @@ program
 
 async function main() {
   program.exitOverride();
+
+  // Lightweight cached update check (non-blocking update apply in background when needed).
+  await maybeAutoUpdate(process.argv);
 
   try {
     await program.parseAsync(process.argv);

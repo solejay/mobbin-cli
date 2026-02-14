@@ -2,6 +2,11 @@ export type MobbinConfig = {
     version: 1;
     defaultProfile?: string;
     outDir?: string;
+    autoUpdate?: boolean;
+    autoUpdateMode?: 'notify' | 'apply';
+    autoUpdateCheckHours?: number;
+    autoUpdateRepo?: string;
+    autoUpdateBranch?: string;
 };
 export declare function defaultConfigPath(): string;
 export declare function loadConfig(configPath?: string): MobbinConfig;

@@ -56,6 +56,26 @@ mobbin benchmark-download <id> \
   --repeat 8
 ```
 
+## Auto-update
+
+`mobbin` performs a cached startup update check (default every 20 hours). If a newer build is detected, it applies update in the background and your next run uses the latest version.
+
+Quick controls:
+
+```bash
+# Skip update check for one command
+mobbin --no-update-check --help
+
+# Disable globally via config
+mobbin config set autoUpdate false
+
+# Optional: notify-only mode (do not auto-apply)
+mobbin config set autoUpdateMode notify
+
+# Optional: tune check interval
+mobbin config set autoUpdateCheckHours 24
+```
+
 ## Mobbin Skill Packs (Assistant-agnostic)
 
 This repo includes reusable skill packs:
