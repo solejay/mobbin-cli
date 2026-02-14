@@ -56,7 +56,7 @@ mobbin benchmark-download <id> \
   --repeat 8
 ```
 
-## Mobbin Skill Packs (OpenClaw / Claude Code / Codex / Gemini)
+## Mobbin Skill Packs (Assistant-agnostic)
 
 This repo includes reusable skill packs:
 
@@ -65,30 +65,29 @@ This repo includes reusable skill packs:
 - `mobbin-auth-profiles/` (profile/session troubleshooting)
 - `mobbin-curation/` (post-download curation workflow)
 
-Each pack is self-contained (`SKILL.md` + optional scripts), so you can plug them into any assistant/tooling that supports custom skills or prompt-pack workflows.
+Each pack is self-contained (`SKILL.md` + optional scripts), so you can use them with any agent framework that supports custom skills/prompts.
 
-### Generic install (any assistant)
+### Install skill packs (generic)
 
-From this repo root, copy the packs into your assistant's configured skills directory:
+From this repo root, copy the packs into your tool's configured skills/prompts directory:
 
 ```bash
-mkdir -p <your-skills-dir>
-cp -R mobbin-skill mobbin-app-screens mobbin-auth-profiles mobbin-curation <your-skills-dir>/
+mkdir -p <skills-dir>
+cp -R mobbin-skill mobbin-app-screens mobbin-auth-profiles mobbin-curation <skills-dir>/
 ```
 
 Then reload/restart your assistant session.
 
-### OpenClaw example
+### Platform mapping examples
 
-```bash
-mkdir -p ~/clawd/skills
-cp -R mobbin-skill mobbin-app-screens mobbin-auth-profiles mobbin-curation ~/clawd/skills/
-```
+Use the same copy command, replacing `<skills-dir>` with your actual path:
 
-### Notes for Claude Code / Codex / Gemini users
+- Claude Code: `<skills-dir>` = your configured Claude skills/prompts folder
+- Codex: `<skills-dir>` = your configured Codex skills/prompts folder
+- Gemini: `<skills-dir>` = your configured Gemini skills/prompts folder
+- OpenClaw: `<skills-dir>` = `~/clawd/skills`
 
-- If your setup supports directory-based custom skills/prompts, place these folders in that configured location.
-- If not, you can still use them as runbooks: read each `SKILL.md` and run any referenced script directly (for example `mobbin-skill/scripts/gather-inspiration.mjs`).
+If your tool does not support folder-based skills, use these as runbooks: read each `SKILL.md` and run referenced scripts directly (for example `mobbin-skill/scripts/gather-inspiration.mjs`).
 
 ## Troubleshooting
 
