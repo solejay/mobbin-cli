@@ -19,6 +19,8 @@ function parseArgs(argv) {
     creativePerQueryLimit: 10,
     creativeMaxPerApp: 2,
     creativeQueryPack: null,
+    verify: true,
+    verifyMinScore: 3,
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
@@ -36,6 +38,8 @@ function parseArgs(argv) {
     else if (a === '--creative-per-query-limit' && next) (out.creativePerQueryLimit = Number(next)), i++;
     else if (a === '--creative-max-per-app' && next) (out.creativeMaxPerApp = Number(next)), i++;
     else if (a === '--creative-query-pack' && next) (out.creativeQueryPack = next), i++;
+    else if (a === '--no-verify') out.verify = false;
+    else if (a === '--verify-min-score' && next) (out.verifyMinScore = Number(next)), i++;
     else if (a === '--no-resume') out.resume = false;
     else if (a === '--help') {
       console.log(`Usage:
@@ -43,6 +47,7 @@ function parseArgs(argv) {
     [--download-concurrency 8] [--download-timeout-ms 15000] [--download-retries 1] [--no-download-profile]
     [--creative|--no-creative] [--creative-per-query-limit 10] [--creative-max-per-app 2]
     [--creative-query-pack "Onboarding,Welcome,Product Tour"]
+    [--no-verify] [--verify-min-score 3]
 
 Examples:
   gather-inspiration.mjs --query "Login" --platform ios --limit 15 --out ./inspiration/mobbin/login
@@ -51,6 +56,7 @@ Examples:
   gather-inspiration.mjs --query "Empty State" --platform ios --limit 15 --out ./inspiration/mobbin/empty-state
   gather-inspiration.mjs --query "Onboarding for logging" --platform web --limit 20 --out ./inspiration/mobbin/onboarding-logging
   gather-inspiration.mjs --query "Onboarding" --platform ios --limit 10 --out ./inspiration/mobbin/onboarding-exact --no-creative
+  gather-inspiration.mjs --query "Onboarding" --platform ios --limit 10 --out ./inspiration/mobbin/onboarding-strict --verify-min-score 5
 
 Common screen types:
   - Authentication: Login, Sign Up, Forgot Password, OTP, SSO
@@ -96,6 +102,10 @@ Common screen types:
   }
   if (!Number.isInteger(out.creativeMaxPerApp) || out.creativeMaxPerApp <= 0) {
     console.error('Error: --creative-max-per-app must be a positive integer.');
+    process.exit(1);
+  }
+  if (!Number.isInteger(out.verifyMinScore) || out.verifyMinScore < 0) {
+    console.error('Error: --verify-min-score must be a non-negative integer.');
     process.exit(1);
   }
 
@@ -217,6 +227,102 @@ function inferCreativePack(query) {
   return dedupeTerms([query, ...pack]);
 }
 
+function inferIntent(query) {
+  const q = String(query || '').toLowerCase();
+  const logging = ['logging', 'log', 'journal', 'history', 'tracking', 'timeline', 'activity'];
+  const auth = ['login', 'log in', 'sign in', 'signin', 'sign up', 'signup', 'auth', 'authentication', 'otp', 'sso'];
+  const onboarding = ['onboarding', 'on board', 'welcome', 'first run', 'getting started', 'tutorial', 'intro', 'introduction'];
+
+  if (logging.some(k => q.includes(k))) return 'logging';
+  if (auth.some(k => q.includes(k))) return 'auth';
+  if (onboarding.some(k => q.includes(k))) return 'onboarding';
+  return 'general';
+}
+
+function relevanceTerms(intent) {
+  if (intent === 'logging') {
+    return {
+      positiveStrong: ['onboarding', 'activity log', 'journal', 'history', 'timeline', 'tracking'],
+      positiveWeak: ['welcome', 'getting started', 'first run', 'progress', 'goal', 'task', 'check-in'],
+      negative: ['checkout', 'payment', 'wallet', 'billing', 'cart'],
+    };
+  }
+  if (intent === 'auth') {
+    return {
+      positiveStrong: ['onboarding', 'login', 'sign up', 'signup', 'authentication', 'otp', 'sso'],
+      positiveWeak: ['welcome', 'first run', 'getting started', 'permissions', 'guided tour'],
+      negative: ['checkout', 'payment', 'wallet', 'billing', 'cart'],
+    };
+  }
+  if (intent === 'onboarding') {
+    return {
+      positiveStrong: ['onboarding', 'welcome', 'getting started', 'first run', 'guided tour', 'tutorial', 'permissions'],
+      positiveWeak: ['intro', 'introduction', 'feature tour', 'sign up', 'signup', 'login', 'personalization', 'progress'],
+      negative: ['checkout', 'payment', 'wallet', 'billing', 'cart', 'charts', 'analytics'],
+    };
+  }
+  return {
+    positiveStrong: [],
+    positiveWeak: [],
+    negative: [],
+  };
+}
+
+function countMatches(text, terms) {
+  let hits = 0;
+  for (const term of terms) {
+    if (text.includes(term)) hits++;
+  }
+  return hits;
+}
+
+function computeRelevance(screen, query, intent) {
+  const title = String(screen.title ?? '').toLowerCase();
+  const tags = (screen.tags ?? []).map(t => String(t).toLowerCase());
+  const matchedQueries = (screen.matchedQueries ?? []).map(q => String(q).toLowerCase());
+  const text = [title, ...tags, ...matchedQueries].join(' | ');
+
+  const terms = relevanceTerms(intent);
+  const strongHits = countMatches(text, terms.positiveStrong);
+  const weakHits = countMatches(text, terms.positiveWeak);
+  const negativeHits = countMatches(text, terms.negative);
+
+  const queryTokens = String(query || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t.length > 2);
+  const queryHits = queryTokens.filter(t => text.includes(t)).length;
+
+  const score = strongHits * 4 + weakHits * 2 + queryHits - negativeHits * 3;
+  return {
+    score,
+    strongHits,
+    weakHits,
+    queryHits,
+    negativeHits,
+  };
+}
+
+function annotateAndVerifyCandidates(candidates, args, intent) {
+  const annotated = [];
+  const rejected = [];
+  for (const c of candidates) {
+    const relevance = computeRelevance(c, args.query, intent);
+    const withRel = { ...c, relevance };
+    if (!args.verify || relevance.score >= args.verifyMinScore) {
+      annotated.push(withRel);
+    } else {
+      rejected.push({
+        id: c.id,
+        appName: c.appName,
+        title: c.title,
+        relevance,
+      });
+    }
+  }
+  return { kept: annotated, rejected };
+}
+
 function searchScreens(query, args, limit) {
   const json = sh('mobbin', [
     'search',
@@ -278,7 +384,8 @@ function pickCreativeResults(candidates, limit, maxPerApp) {
       const novelTags = tags.filter(t => !seenTags.has(t.toLowerCase())).length;
       const queryBonus = (c.matchedQueries?.length ?? 1) * 2;
       const appBonus = appCount === 0 ? 2 : 0;
-      const score = novelTags * 3 + queryBonus + appBonus;
+      const relevanceBonus = c.relevance?.score ?? 0;
+      const score = relevanceBonus * 5 + novelTags * 2 + queryBonus + appBonus;
       if (score > bestScore) {
         best = c;
         bestScore = score;
@@ -311,10 +418,15 @@ console.log(`Collecting ${args.query} inspiration...`);
 console.log(`Platform: ${args.platform}, Limit: ${args.limit}`);
 console.log(`Output: ${args.outDir}`);
 console.log(`Resume: ${args.resume ? 'on' : 'off'}`);
-console.log(
-  `Download profile: c=${args.downloadConcurrency}, timeout=${args.downloadTimeoutMs}ms, retries=${args.downloadRetries}, profile=${args.downloadProfile ? 'on' : 'off'}`,
-);
-if (args.creative) {
+  console.log(
+    `Download profile: c=${args.downloadConcurrency}, timeout=${args.downloadTimeoutMs}ms, retries=${args.downloadRetries}, profile=${args.downloadProfile ? 'on' : 'off'}`,
+  );
+  if (args.verify) {
+    console.log(`Relevance verification: on (min-score=${args.verifyMinScore})`);
+  } else {
+    console.log('Relevance verification: off');
+  }
+  if (args.creative) {
   console.log(
     `Creative mode: on (per-query-limit=${args.creativePerQueryLimit}, max-per-app=${args.creativeMaxPerApp})`,
   );
@@ -333,30 +445,41 @@ try {
 // 2) Search
 let results;
 let creativeMeta = null;
+const intent = inferIntent(args.query);
 try {
   if (args.creative) {
     console.log(`Creative search for "${args.query}"...`);
     const collected = buildCreativeCandidates(args);
-    results = pickCreativeResults(collected.candidates, args.limit, args.creativeMaxPerApp);
+    const verified = annotateAndVerifyCandidates(collected.candidates, args, intent);
+    const pool = verified.kept.length ? verified.kept : collected.candidates.map(c => ({ ...c, relevance: computeRelevance(c, args.query, intent) }));
+    results = pickCreativeResults(pool, args.limit, args.creativeMaxPerApp);
     creativeMeta = {
       mode: 'creative',
       sourceQuery: args.query,
+      intent,
+      verify: args.verify,
+      verifyMinScore: args.verifyMinScore,
       queriesUsed: collected.queries,
       perQuery: collected.perQuery,
       totalCandidates: collected.candidates.length,
+      verifiedCandidates: pool.length,
+      rejectedByVerification: verified.rejected,
       selected: results.map(r => ({
         id: r.id,
         appName: r.appName,
         title: r.title,
         matchedQueries: r.matchedQueries ?? [],
         creativityScore: r.creativityScore ?? 0,
+        relevanceScore: r.relevance?.score ?? 0,
       })),
     };
     fs.writeFileSync(path.join(args.outDir, 'creative-searches.json'), JSON.stringify(creativeMeta, null, 2), 'utf8');
-    console.log(`✓ Creative mode selected ${results.length} screens from ${collected.candidates.length} candidates`);
+    console.log(`✓ Creative mode selected ${results.length} screens from ${collected.candidates.length} candidates (verified pool ${pool.length})`);
   } else {
     console.log(`Searching for "${args.query}" screens...`);
-    results = searchScreens(args.query, args, args.limit);
+    const strictResults = searchScreens(args.query, args, args.limit);
+    const verified = annotateAndVerifyCandidates(strictResults, args, intent);
+    results = verified.kept.length ? verified.kept : strictResults.map(c => ({ ...c, relevance: computeRelevance(c, args.query, intent) }));
     console.log(`✓ Found ${results.length} screens`);
   }
 } catch (e) {
@@ -370,7 +493,7 @@ console.log('Screen IDs:');
 for (const r of results) {
   const app = r.appName ?? 'Unknown App';
   const creativeSuffix = args.creative
-    ? ` | score=${r.creativityScore ?? 0} | queries=${(r.matchedQueries ?? []).join(', ')}`
+    ? ` | score=${r.creativityScore ?? 0} | relevance=${r.relevance?.score ?? 0} | queries=${(r.matchedQueries ?? []).join(', ')}`
     : '';
   console.log(`  - ${app} : ${r.id}${creativeSuffix}`);
 }
@@ -421,6 +544,7 @@ for (const r of results) {
         ...(args.creative && typeof r.creativityScore === 'number'
           ? [`Creativity score: ${r.creativityScore}`]
           : []),
+        ...(typeof r.relevance?.score === 'number' ? [`Relevance score: ${r.relevance.score}`] : []),
       ],
     });
     state.downloaded.add(id);
@@ -445,6 +569,7 @@ for (const r of results) {
           ...(args.creative && typeof r.creativityScore === 'number'
             ? [`Creativity score: ${r.creativityScore}`]
             : []),
+          ...(typeof r.relevance?.score === 'number' ? [`Relevance score: ${r.relevance.score}`] : []),
         ],
       });
       state.downloaded.add(id);

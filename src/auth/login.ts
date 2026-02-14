@@ -12,6 +12,7 @@ export type LoginOptions = {
   loginUrl?: string;
   postLoginUrl?: string;
   timeoutMs?: number;
+  profile?: string;
 };
 
 async function waitForLoggedIn(context: BrowserContext, timeoutMs: number) {
@@ -51,12 +52,13 @@ export async function loginInteractive(opts: LoginOptions = {}) {
   const loginUrl = opts.loginUrl ?? DEFAULT_LOGIN_URL;
   const postLoginUrl = opts.postLoginUrl ?? DEFAULT_POST_LOGIN_URL;
   const timeoutMs = opts.timeoutMs ?? 5 * 60_000;
+  const profile = opts.profile ?? 'default';
 
-  ensureStorageStateDir();
+  ensureStorageStateDir(profile);
 
   // Use the installed Google Chrome (less likely to trigger "browser may not be secure" warnings)
   // and a persistent profile to behave more like a normal browser.
-  const context = await chromium.launchPersistentContext(chromeProfileDir(), {
+  const context = await chromium.launchPersistentContext(chromeProfileDir(profile), {
     headless: false,
     channel: 'chrome',
     args: ['--disable-blink-features=AutomationControlled'],
@@ -74,9 +76,9 @@ export async function loginInteractive(opts: LoginOptions = {}) {
   });
 
   const state = await context.storageState();
-  fs.writeFileSync(storageStatePath(), JSON.stringify(state, null, 2), 'utf-8');
+  fs.writeFileSync(storageStatePath(profile), JSON.stringify(state, null, 2), 'utf-8');
 
   await context.close();
 
-  return { storageState: storageStatePath() };
+  return { storageState: storageStatePath(profile) };
 }

@@ -1,10 +1,11 @@
 import { cookieHeaderFromStorageState } from './cookies.js';
 import { loginInteractive } from './login.js';
-import { hasStorageState } from './storageState.js';
+import { hasStorageState, storageStatePath } from './storageState.js';
 import { MobbinClient } from '../api/mobbinClient.js';
 
 type EnsureSessionOptions = {
   commandName?: string;
+  profile?: string;
 };
 
 /**
@@ -14,9 +15,10 @@ type EnsureSessionOptions = {
 export async function ensureValidCookieHeader(
   opts: EnsureSessionOptions = {},
 ): Promise<string | undefined> {
-  if (!hasStorageState()) return undefined;
+  const profile = opts.profile ?? 'default';
+  if (!hasStorageState(profile)) return undefined;
 
-  let cookieHeader = cookieHeaderFromStorageState();
+  let cookieHeader = cookieHeaderFromStorageState(storageStatePath(profile));
   let client = new MobbinClient({ cookieHeader });
   let whoami = await client.whoami();
 
@@ -25,9 +27,9 @@ export async function ensureValidCookieHeader(
   const scope = opts.commandName ? ` for ${opts.commandName}` : '';
   console.error(`Stored Mobbin session appears expired${scope}. Launching mobbin login...`);
 
-  await loginInteractive();
+  await loginInteractive({ profile });
 
-  cookieHeader = cookieHeaderFromStorageState();
+  cookieHeader = cookieHeaderFromStorageState(storageStatePath(profile));
   client = new MobbinClient({ cookieHeader });
   whoami = await client.whoami();
   if (!whoami.ok) {

@@ -177,6 +177,9 @@ Creative mode notes:
 - `--no-creative` disables expansion and uses strict single-query search.
 - `--creative-max-per-app` enforces app diversity to avoid repetitive results.
 - `--creative-query-pack "Onboarding,Welcome,Activity Log,Journal,History"` lets you override inferred keywords.
+- Relevance verification is enabled by default to filter non-matching results before download.
+- `--verify-min-score 3` sets strictness for relevance filtering (higher = stricter onboarding match).
+- `--no-verify` disables relevance filtering.
 - Script writes `creative-searches.json` with the expanded query set, per-query hit counts, and selected scores.
 
 ## CLI reference (from `mobbin --help`)

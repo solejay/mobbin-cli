@@ -1,2 +1,4 @@
-export declare function cmdWhoami(): Promise<void>;
+export declare function cmdWhoami(opts?: {
+    profile?: string;
+}): Promise<void>;
 //# sourceMappingURL=whoami.d.ts.map

@@ -12,25 +12,38 @@ export async function cmdDownload(
     headless?: boolean;
     timeoutMs?: number;
     retries?: number;
+    /**
+     * Legacy flag (hidden command): `--profile` printed timing stats.
+     * In new grouped commands we use `--timing` but pass it through here.
+     */
     profile?: boolean;
+    /** Select which mobbin-cli auth profile to use (storageState + chrome profile). */
+    authProfile?: string;
   },
 ) {
-  if (!hasStorageState()) {
-    console.error('Not logged in. Run: mobbin login');
+  const profileName = opts.authProfile ?? 'default';
+
+  if (!hasStorageState(profileName)) {
+    console.error('Not logged in. Run: mobbin auth login');
     process.exitCode = 1;
     return;
   }
 
-  const cookieHeader = await ensureValidCookieHeader({ commandName: 'download' });
+  const cookieHeader = await ensureValidCookieHeader({ commandName: 'download', profile: profileName });
   if (!cookieHeader) {
-    console.error('Not logged in. Run: mobbin login');
+    console.error('Not logged in. Run: mobbin auth login');
     process.exitCode = 1;
     return;
   }
 
   const client = new MobbinClient({ cookieHeader });
 
-  const flow = await client.getFlow(id);
+  // Accept either a screen/flow id OR a full Mobbin URL.
+  const normalizedId = String(id).trim();
+  const screenMatch = normalizedId.match(/\/screens\/([a-f0-9-]{36})/i);
+  const inferredId = screenMatch?.[1] ?? normalizedId;
+
+  const flow = await client.getFlow(inferredId);
   const assets = await client.listFlowAssets(flow);
 
   if (!assets.length) {
@@ -43,7 +56,8 @@ export async function cmdDownload(
     outDir: opts.out,
     concurrency: opts.concurrency,
     cookieHeader,
-    storageStatePath: storageStatePath(),
+    profileName,
+    storageStatePath: storageStatePath(profileName),
     directTimeoutMs: opts.timeoutMs,
     directRetries: opts.retries,
     browserFallback: opts.browserFallback,

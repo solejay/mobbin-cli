@@ -3,19 +3,24 @@ import { MobbinClient } from '../api/mobbinClient.js';
 import { downloadFlow } from '../download/downloader.js';
 import { ensureValidCookieHeader } from '../auth/session.js';
 export async function cmdDownload(id, opts) {
-    if (!hasStorageState()) {
-        console.error('Not logged in. Run: mobbin login');
+    const profileName = opts.authProfile ?? 'default';
+    if (!hasStorageState(profileName)) {
+        console.error('Not logged in. Run: mobbin auth login');
         process.exitCode = 1;
         return;
     }
-    const cookieHeader = await ensureValidCookieHeader({ commandName: 'download' });
+    const cookieHeader = await ensureValidCookieHeader({ commandName: 'download', profile: profileName });
     if (!cookieHeader) {
-        console.error('Not logged in. Run: mobbin login');
+        console.error('Not logged in. Run: mobbin auth login');
         process.exitCode = 1;
         return;
     }
     const client = new MobbinClient({ cookieHeader });
-    const flow = await client.getFlow(id);
+    // Accept either a screen/flow id OR a full Mobbin URL.
+    const normalizedId = String(id).trim();
+    const screenMatch = normalizedId.match(/\/screens\/([a-f0-9-]{36})/i);
+    const inferredId = screenMatch?.[1] ?? normalizedId;
+    const flow = await client.getFlow(inferredId);
     const assets = await client.listFlowAssets(flow);
     if (!assets.length) {
         console.error('No assets found (download not implemented yet—needs endpoint discovery).');
@@ -26,7 +31,8 @@ export async function cmdDownload(id, opts) {
         outDir: opts.out,
         concurrency: opts.concurrency,
         cookieHeader,
-        storageStatePath: storageStatePath(),
+        profileName,
+        storageStatePath: storageStatePath(profileName),
         directTimeoutMs: opts.timeoutMs,
         directRetries: opts.retries,
         browserFallback: opts.browserFallback,

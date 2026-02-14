@@ -2,14 +2,15 @@ import { hasStorageState } from '../auth/storageState.js';
 import { MobbinClient } from '../api/mobbinClient.js';
 import { ensureValidCookieHeader } from '../auth/session.js';
 
-export async function cmdWhoami() {
-  if (!hasStorageState()) {
-    console.error('Not logged in. Run: mobbin login');
+export async function cmdWhoami(opts?: { profile?: string }) {
+  const profile = opts?.profile ?? 'default';
+  if (!hasStorageState(profile)) {
+    console.error('Not logged in. Run: mobbin auth login');
     process.exitCode = 1;
     return;
   }
 
-  const cookieHeader = await ensureValidCookieHeader({ commandName: 'whoami' });
+  const cookieHeader = await ensureValidCookieHeader({ commandName: 'whoami', profile });
   if (!cookieHeader) {
     console.error('Not logged in. Run: mobbin login');
     process.exitCode = 1;

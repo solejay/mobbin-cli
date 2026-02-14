@@ -5,6 +5,8 @@ export type DownloadOptions = {
     fallbackConcurrency?: number;
     cookieHeader?: string;
     storageStatePath?: string;
+    /** mobbin-cli auth profile name (controls Playwright persistent Chrome profile dir) */
+    profileName?: string;
     directTimeoutMs?: number;
     directRetries?: number;
     forceBrowserFallback?: boolean;
