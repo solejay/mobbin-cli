@@ -9,13 +9,13 @@ description: Collect UI inspiration from Mobbin using the local `mobbin` CLI. Us
 
 - `mobbin` must be installed and on PATH (global `npm link`)
 - Use grouped commands (current CLI): `auth`, `shots`, `app screens`, `config`
-- Auth is **not auto-login**. Authenticate first:
+- Use profile `default` by default (avoid accidental `test` profile)
+
+Authenticate first:
 
 ```bash
-mobbin auth login --profile <name>
+mobbin auth login --profile default
 ```
-
-If you omit `--profile`, CLI resolves profile from config/env/default.
 
 ## Parameters
 
@@ -27,7 +27,7 @@ When collecting inspiration, identify:
 | `platform` | `ios` | `ios`, `android`, or `web` |
 | `limit` | `15` | Number of search results |
 | `outputDir` | `./inspiration/mobbin/<screenType>` | Output root directory |
-| `authProfile` | config/env/default | Mobbin auth profile |
+| `authProfile` | `default` | Mobbin auth profile (use `default` unless explicitly overridden) |
 | `downloadMode` | `app-screens` | `app-screens` (recommended) or `shots` |
 | `downloadConcurrency` | `8` | Download concurrency |
 | `downloadTimeoutMs` | `15000` | Direct request timeout before browser fallback |
@@ -38,13 +38,13 @@ When collecting inspiration, identify:
 1) Verify auth
 
 ```bash
-mobbin auth status --profile <name>
+mobbin auth status --profile default
 ```
 
 If not logged in:
 
 ```bash
-mobbin auth login --profile <name>
+mobbin auth login --profile default
 ```
 
 2) Search
@@ -63,7 +63,7 @@ For each result URL in `results.json` (`url` field):
 mobbin app screens download \
   --url "<appScreensUrl>" \
   --out ./inspiration/mobbin/<screenType> \
-  --profile <name> \
+  --profile default \
   --concurrency 8 \
   --timeout-ms 15000 \
   --retries 1 \
@@ -77,7 +77,7 @@ Use only when you already have a screen URL or screen UUID:
 ```bash
 mobbin shots download "https://mobbin.com/screens/<screen-id>" \
   --out ./inspiration/mobbin/<screenType> \
-  --profile <name> \
+  --profile default \
   --concurrency 8 \
   --timeout-ms 15000 \
   --retries 1 \
@@ -106,7 +106,7 @@ node mobbin-skill/scripts/gather-inspiration.mjs \
   --platform ios \
   --limit 15 \
   --out ./inspiration/mobbin/<screenType> \
-  --profile <name>
+  --profile default
 ```
 
 Optional flags:
@@ -122,15 +122,15 @@ Optional flags:
 ## Current CLI reference
 
 ```bash
-mobbin auth login --profile <name>
-mobbin auth status --profile <name>
-mobbin auth logout --profile <name>
+mobbin auth login --profile default
+mobbin auth status --profile default
+mobbin auth logout --profile default
 
 mobbin search <query> --platform ios|android|web --limit <n> --json
 
-mobbin shots download <screen-id-or-screen-url> --out <dir> --profile <name> --timing
+mobbin shots download <screen-id-or-screen-url> --out <dir> --profile default --timing
 
-mobbin app screens download --url <app-screens-url> --out <dir> --profile <name> --timing
+mobbin app screens download --url <app-screens-url> --out <dir> --profile default --timing
 
 mobbin config get defaultProfile
 mobbin config set defaultProfile default
@@ -138,7 +138,7 @@ mobbin config set defaultProfile default
 
 ## Troubleshooting
 
-- `Not logged in`: run `mobbin auth login --profile <name>`
+- `Not logged in`: run `mobbin auth login --profile default`
 - Wrong default profile:
   ```bash
   mobbin config set defaultProfile default

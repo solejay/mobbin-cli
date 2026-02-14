@@ -10,7 +10,7 @@ function parseArgs(argv) {
     platform: 'ios',
     limit: 15,
     outDir: null,
-    profile: null,
+    profile: 'default',
     resume: true,
     downloadMode: 'app-screens', // app-screens | shots
     downloadConcurrency: 8,
@@ -411,7 +411,8 @@ function buildDownloadArgs(result, args) {
       String(args.downloadTimeoutMs),
       '--retries',
       String(args.downloadRetries),
-      ...(args.profile ? ['--profile', args.profile] : []),
+      '--profile',
+      args.profile,
       ...(args.downloadTiming ? ['--timing'] : []),
     ];
   }
@@ -430,7 +431,8 @@ function buildDownloadArgs(result, args) {
     String(args.downloadTimeoutMs),
     '--retries',
     String(args.downloadRetries),
-    ...(args.profile ? ['--profile', args.profile] : []),
+    '--profile',
+    args.profile,
     ...(args.downloadTiming ? ['--timing'] : []),
   ];
 }
@@ -468,7 +470,7 @@ if (args.profile) {
 console.log(`Collecting ${args.query} inspiration...`);
 console.log(`Platform: ${args.platform}, Limit: ${args.limit}`);
 console.log(`Output: ${args.outDir}`);
-console.log(`Profile: ${args.profile ?? '(resolved by mobbin config/env/default)'}`);
+console.log(`Profile: ${args.profile}`);
 console.log(`Resume: ${args.resume ? 'on' : 'off'}`);
 console.log(`Download mode: ${args.downloadMode}`);
 console.log(
@@ -488,11 +490,11 @@ console.log('');
 
 // 1) Auth check
 try {
-  const authArgs = ['auth', 'status', ...(args.profile ? ['--profile', args.profile] : [])];
+  const authArgs = ['auth', 'status', '--profile', args.profile];
   sh('mobbin', authArgs);
   console.log('✓ Authenticated with Mobbin');
 } catch (e) {
-  console.error('✗ Not logged in. Run: mobbin auth login' + (args.profile ? ` --profile ${args.profile}` : ''));
+  console.error(`✗ Not logged in. Run: mobbin auth login --profile ${args.profile}`);
   process.exit(1);
 }
 
