@@ -19,3 +19,11 @@ inspo-test/
 # Env
 .env
 .env.*
+
+# Local assistant context files
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+
+# Local-only GitHub workflow drafts
+.github/
