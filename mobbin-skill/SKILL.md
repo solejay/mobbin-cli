@@ -67,6 +67,8 @@ mobbin app screens download \
   --concurrency 8 \
   --timeout-ms 15000 \
   --retries 1 \
+  --max-scrolls 60 \
+  --scroll-wait-ms 900 \
   --timing
 ```
 
@@ -113,6 +115,8 @@ Optional flags:
 
 ```bash
 --download-mode app-screens|shots
+--max-scrolls 60
+--scroll-wait-ms 900
 --no-creative
 --creative-per-query-limit 10
 --creative-max-per-app 2
@@ -130,7 +134,7 @@ mobbin search <query> --platform ios|android|web --limit <n> --json
 
 mobbin shots download <screen-id-or-screen-url> --out <dir> --profile default --timing
 
-mobbin app screens download --url <app-screens-url> --out <dir> --profile default --timing
+mobbin app screens download --url <app-screens-url> --out <dir> --profile default --max-scrolls 60 --scroll-wait-ms 900 --timing
 
 mobbin config get defaultProfile
 mobbin config set defaultProfile default

@@ -16,6 +16,8 @@ function parseArgs(argv) {
     downloadConcurrency: 8,
     downloadTimeoutMs: 15000,
     downloadRetries: 1,
+    maxScrolls: 60,
+    scrollWaitMs: 900,
     downloadTiming: true,
     creative: true,
     creativePerQueryLimit: 10,
@@ -38,6 +40,8 @@ function parseArgs(argv) {
     else if (a === '--download-concurrency' && next) (out.downloadConcurrency = Number(next)), i++;
     else if (a === '--download-timeout-ms' && next) (out.downloadTimeoutMs = Number(next)), i++;
     else if (a === '--download-retries' && next) (out.downloadRetries = Number(next)), i++;
+    else if (a === '--max-scrolls' && next) (out.maxScrolls = Number(next)), i++;
+    else if (a === '--scroll-wait-ms' && next) (out.scrollWaitMs = Number(next)), i++;
     else if (a === '--no-download-timing') out.downloadTiming = false;
     else if (a === '--creative') out.creative = true;
     else if (a === '--no-creative') out.creative = false;
@@ -51,7 +55,8 @@ function parseArgs(argv) {
       console.log(`Usage:
   gather-inspiration.mjs --query "<screenType>" --platform ios --limit 15 --out ./inspiration/mobbin/<screenType> [--profile default] [--no-resume]
     [--download-mode app-screens|shots]
-    [--download-concurrency 8] [--download-timeout-ms 15000] [--download-retries 1] [--no-download-timing]
+    [--download-concurrency 8] [--download-timeout-ms 15000] [--download-retries 1]
+    [--max-scrolls 60] [--scroll-wait-ms 900] [--no-download-timing]
     [--creative|--no-creative] [--creative-per-query-limit 10] [--creative-max-per-app 2]
     [--creative-query-pack "Onboarding,Welcome,Product Tour"]
     [--no-verify] [--verify-min-score 3]
@@ -62,6 +67,7 @@ Examples:
   gather-inspiration.mjs --query "Onboarding for logging" --platform web --limit 20 --out ./inspiration/mobbin/onboarding-logging
   gather-inspiration.mjs --query "Onboarding" --platform ios --limit 10 --out ./inspiration/mobbin/onboarding-exact --no-creative
   gather-inspiration.mjs --query "Login" --platform ios --limit 10 --out ./inspiration/mobbin/login-shots --download-mode shots
+  gather-inspiration.mjs --query "Onboarding" --out ./inspiration/mobbin/onboarding-large --max-scrolls 120 --scroll-wait-ms 1400
 `);
       process.exit(0);
     }
@@ -92,6 +98,14 @@ Examples:
   }
   if (!Number.isInteger(out.downloadRetries) || out.downloadRetries < 0) {
     console.error('Error: --download-retries must be a non-negative integer.');
+    process.exit(1);
+  }
+  if (!Number.isInteger(out.maxScrolls) || out.maxScrolls <= 0) {
+    console.error('Error: --max-scrolls must be a positive integer.');
+    process.exit(1);
+  }
+  if (!Number.isInteger(out.scrollWaitMs) || out.scrollWaitMs <= 0) {
+    console.error('Error: --scroll-wait-ms must be a positive integer.');
     process.exit(1);
   }
   if (!Number.isInteger(out.creativePerQueryLimit) || out.creativePerQueryLimit <= 0) {
@@ -431,6 +445,10 @@ function buildDownloadArgs(result, args) {
     String(args.downloadTimeoutMs),
     '--retries',
     String(args.downloadRetries),
+    '--max-scrolls',
+    String(args.maxScrolls),
+    '--scroll-wait-ms',
+    String(args.scrollWaitMs),
     '--profile',
     args.profile,
     ...(args.downloadTiming ? ['--timing'] : []),
@@ -476,6 +494,9 @@ console.log(`Download mode: ${args.downloadMode}`);
 console.log(
   `Download profile: c=${args.downloadConcurrency}, timeout=${args.downloadTimeoutMs}ms, retries=${args.downloadRetries}, timing=${args.downloadTiming ? 'on' : 'off'}`,
 );
+if (args.downloadMode === 'app-screens') {
+  console.log(`App-screens scraping: max-scrolls=${args.maxScrolls}, scroll-wait-ms=${args.scrollWaitMs}`);
+}
 if (args.verify) {
   console.log(`Relevance verification: on (min-score=${args.verifyMinScore})`);
 } else {
