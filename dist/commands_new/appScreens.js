@@ -67,7 +67,7 @@ function extractScreenIdsFromHrefs(hrefs) {
     return uniq(ids);
 }
 async function scrapeScreenIdsViaPlaywright(appScreensUrl, opts) {
-    const { profile, headless } = opts;
+    const { profile, headless, maxScrolls, scrollWaitMs } = opts;
     const statePath = storageStatePath(profile);
     const browser = await chromium.launch({
         headless,
@@ -78,9 +78,10 @@ async function scrapeScreenIdsViaPlaywright(appScreensUrl, opts) {
     const page = await context.newPage();
     await page.goto(appScreensUrl, { waitUntil: 'domcontentloaded' });
     await dismissOverlays(page);
+    const stableRoundThreshold = 3;
     let stableRounds = 0;
     let lastCount = 0;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < maxScrolls; i++) {
         const hrefs = await page
             .locator('a[href^="/screens/"]')
             .evaluateAll((els) => els.map((e) => e.getAttribute('href')));
@@ -92,8 +93,8 @@ async function scrapeScreenIdsViaPlaywright(appScreensUrl, opts) {
             stableRounds = 0;
         lastCount = count;
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
-        await page.waitForTimeout(900);
-        if (stableRounds >= 3 && count > 0) {
+        await page.waitForTimeout(scrollWaitMs);
+        if (stableRounds >= stableRoundThreshold && count > 0) {
             await context.close();
             await browser.close();
             return ids;
@@ -120,6 +121,8 @@ export function registerAppScreensCommands(parent) {
         .option('--timeout-ms <n>', 'Direct image-request timeout in ms before fallback', parsePositiveInt('timeout-ms'))
         .option('--retries <n>', 'Direct image-request retries', parseNonNegativeInt('retries'))
         .option('--headless [boolean]', 'Run browser headless (true/false; omit value to mean true)', parseBooleanFlag, true)
+        .option('--max-scrolls <n>', 'Maximum Playwright scroll cycles while scraping app screens', parsePositiveInt('max-scrolls'), 60)
+        .option('--scroll-wait-ms <n>', 'Delay after each scroll while scraping app screens', parsePositiveInt('scroll-wait-ms'), 900)
         .option('--no-browser-fallback', 'Disable browser fallback when direct download fails')
         .option('--timing', 'Print download timing summary', false)
         .action(async (opts) => {
@@ -142,10 +145,13 @@ export function registerAppScreensCommands(parent) {
         const screenIds = await scrapeScreenIdsViaPlaywright(appScreensUrl, {
             profile,
             headless: opts.headless,
+            maxScrolls: opts.maxScrolls,
+            scrollWaitMs: opts.scrollWaitMs,
         });
         if (!screenIds.length) {
             console.error('No screen URLs found on page. This can happen if Mobbin blocks scrolling or the session is invalid.\n' +
-                'Try: mobbin auth status (or re-login), then rerun with --headless=false to observe the page.');
+                'Try: mobbin auth status (or re-login), then rerun with --headless=false to observe the page.\n' +
+                'For very large pages, increase --max-scrolls and/or --scroll-wait-ms.');
             process.exitCode = 1;
             return;
         }
