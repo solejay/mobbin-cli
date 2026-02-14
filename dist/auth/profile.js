@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { appConfigDir, ensureDir } from '../utils/paths.js';
-export function chromeProfilePath() {
-    return path.join(appConfigDir(), 'chrome-profile');
+export function chromeProfilePath(profile = 'default') {
+    // Isolate Chrome profiles per mobbin-cli profile name (prevents SingletonLock collisions)
+    return path.join(appConfigDir(), 'profiles', profile, 'chrome-profile');
 }
-export function chromeProfileDir() {
-    const dir = chromeProfilePath();
+export function chromeProfileDir(profile = 'default') {
+    const dir = chromeProfilePath(profile);
     ensureDir(dir);
     return dir;
 }

@@ -4,19 +4,22 @@ import { chromeProfilePath } from '../auth/profile.js';
 
 export type LogoutOptions = {
   keepProfile?: boolean;
+  profile?: string;
 };
 
 export function cmdLogout(opts: LogoutOptions = {}) {
   const removed: string[] = [];
 
-  const statePath = storageStatePath();
+  const profile = opts.profile ?? 'default';
+
+  const statePath = storageStatePath(profile);
   if (fs.existsSync(statePath)) {
     fs.rmSync(statePath, { force: true });
     removed.push(statePath);
   }
 
   if (!opts.keepProfile) {
-    const profilePath = chromeProfilePath();
+    const profilePath = chromeProfilePath(profile);
     if (fs.existsSync(profilePath)) {
       fs.rmSync(profilePath, { recursive: true, force: true });
       removed.push(profilePath);

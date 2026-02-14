@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { Command, CommanderError } from 'commander';
-import { cmdLogin } from './commands/login.js';
-import { cmdWhoami } from './commands/whoami.js';
 import { cmdSearch } from './commands/search.js';
-import { cmdDownload } from './commands/download.js';
 import { cmdBenchmarkDownload } from './commands/benchmarkDownload.js';
 import { cmdSniff } from './commands/sniff.js';
-import { cmdLogout } from './commands/logout.js';
 import type { Platform } from './types/models.js';
+
+import { registerAuthCommands } from './commands_new/auth.js';
+import { registerShotsCommands } from './commands_new/shots.js';
+import { registerConfigCommands } from './commands_new/config.js';
+import { registerAppScreensCommands } from './commands_new/appScreens.js';
 
 const program = new Command();
 
@@ -91,27 +92,36 @@ program
   .version(readPackageVersion())
   .option('--debug', 'Show stack traces for errors', false);
 
+// New grouped command UX (gogcli-inspired)
+registerAuthCommands(program);
+registerShotsCommands(program);
+registerConfigCommands(program);
+registerAppScreensCommands(program);
+
+// Legacy flat commands (kept as hidden aliases)
 program
-  .command('login')
-  .description('Login to Mobbin using an interactive browser (handles 2FA).')
+  .command('login', { hidden: true })
+  .description('Login to Mobbin (alias of `mobbin auth login`).')
   .action(async () => {
+    // lazy import to avoid unused imports
+    const { cmdLogin } = await import('./commands/login.js');
     await cmdLogin();
   });
 
 program
-  .command('logout')
-  .description('Clear stored session data (cookies, Playwright profile).')
+  .command('logout', { hidden: true })
+  .description('Logout (alias of `mobbin auth logout`).')
   .option('--keep-profile', 'Keep the Playwright Chrome profile (cookies/cache)', false)
   .action(async (opts) => {
+    const { cmdLogout } = await import('./commands/logout.js');
     cmdLogout(opts);
   });
 
 program
-  .command('whoami')
-  .description(
-    'Check whether your stored session looks valid (placeholder until endpoint discovery).',
-  )
+  .command('whoami', { hidden: true })
+  .description('Session status (alias of `mobbin auth status`).')
   .action(async () => {
+    const { cmdWhoami } = await import('./commands/whoami.js');
     await cmdWhoami();
   });
 
@@ -127,8 +137,8 @@ program
   });
 
 program
-  .command('download')
-  .description('Download all screens for a flow/result id (by app → by flow).')
+  .command('download', { hidden: true })
+  .description('Download (alias of `mobbin shots download`).')
   .argument('<id>', 'Result/flow id')
   .requiredOption('--out <dir>', 'Output directory')
   .option('--concurrency <n>', 'Download concurrency', parsePositiveInt('concurrency'))
@@ -147,6 +157,7 @@ program
   .option('--browser-fallback', 'Enable browser fallback when direct download fails', true)
   .option('--profile', 'Print download timing summary', false)
   .action(async (id, opts) => {
+    const { cmdDownload } = await import('./commands/download.js');
     await cmdDownload(id, opts);
   });
 

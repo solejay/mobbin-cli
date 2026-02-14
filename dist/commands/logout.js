@@ -3,13 +3,14 @@ import { storageStatePath } from '../auth/storageState.js';
 import { chromeProfilePath } from '../auth/profile.js';
 export function cmdLogout(opts = {}) {
     const removed = [];
-    const statePath = storageStatePath();
+    const profile = opts.profile ?? 'default';
+    const statePath = storageStatePath(profile);
     if (fs.existsSync(statePath)) {
         fs.rmSync(statePath, { force: true });
         removed.push(statePath);
     }
     if (!opts.keepProfile) {
-        const profilePath = chromeProfilePath();
+        const profilePath = chromeProfilePath(profile);
         if (fs.existsSync(profilePath)) {
             fs.rmSync(profilePath, { recursive: true, force: true });
             removed.push(profilePath);

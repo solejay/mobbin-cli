@@ -1,5 +1,6 @@
 type EnsureSessionOptions = {
     commandName?: string;
+    profile?: string;
 };
 /**
  * Returns a valid Cookie header for Mobbin API calls.

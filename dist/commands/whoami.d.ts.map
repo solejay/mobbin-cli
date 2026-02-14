@@ -1,1 +1,1 @@
-{"version":3,"file":"whoami.d.ts","sourceRoot":"","sources":["../../src/commands/whoami.ts"],"names":[],"mappings":"AAIA,wBAAsB,SAAS,kBAiB9B"}
+{"version":3,"file":"whoami.d.ts","sourceRoot":"","sources":["../../src/commands/whoami.ts"],"names":[],"mappings":"AAIA,wBAAsB,SAAS,CAAC,IAAI,CAAC,EAAE;IAAE,OAAO,CAAC,EAAE,MAAM,CAAA;CAAE,iBAkB1D"}

@@ -138,7 +138,7 @@ export async function downloadFlow(flow, assets, opts) {
     const getBrowserCtx = async () => {
         if (browserCtx)
             return browserCtx;
-        const launchPersistent = async () => chromium.launchPersistentContext(chromeProfileDir(), {
+        const launchPersistent = async () => chromium.launchPersistentContext(chromeProfileDir(opts.profileName ?? 'default'), {
             headless: browserHeadless,
             channel: 'chrome',
             args: ['--disable-blink-features=AutomationControlled'],

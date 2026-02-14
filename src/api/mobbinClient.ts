@@ -1,5 +1,5 @@
 import type { Flow, Platform, ScreenAsset, SearchResult } from '../types/models.js';
-import { FetchScreenInfoResponseSchema, FetchScreensResponseSchema } from './mobbinSchemas.js';
+import { FetchScreenInfoResponseSchema } from './mobbinSchemas.js';
 import { bestImageUrlFromSrcSet } from './srcset.js';
 import { bestBytescaleUrlFromHtml } from './htmlExtract.js';
 import { isHighConfidenceImageUrl, pickBestImageUrl } from './imageUrls.js';
@@ -10,6 +10,15 @@ export type MobbinClientOptions = {
   cookieHeader?: string; // e.g. "a=b; c=d"
   userAgent?: string;
 };
+
+function slugify(input: string): string {
+  return String(input)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
 
 function normalizePlatform(p?: string | null): Platform {
   const v = (p ?? '').toLowerCase();
@@ -67,45 +76,51 @@ export class MobbinClient {
     const platform = opts?.platform ?? 'ios';
     const pageSize = opts?.limit ?? 24;
 
-    // Discovered via sniff: POST /api/content/fetch-screens
+    // Updated via sniff (Feb 2026): POST /api/content/search-apps
+    // This returns apps + appVersionIds + preview screens.
     const payload = {
-      searchRequestId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+      searchRequestId: '',
       filterOptions: {
-        filterOperator: 'or',
         platform,
-        screenElements: null,
-        // Best effort: Mobbin seems to accept null or a list.
-        screenKeywords: query ? [query] : null,
-        screenPatterns: null,
+        // Leave categories empty for general search.
         appCategories: null,
-        hasAnimation: null,
+        // The backend appears to accept a free-text query via screenKeywords for some searches,
+        // but for apps search we pass it as `query`.
+        query,
       },
       paginationOptions: {
         pageSize,
-        sortBy: 'trending',
+        sortBy: 'publishedAt',
       },
     };
 
-    const raw = await this.httpJson(this.apiUrl('/api/content/fetch-screens'), {
+    const raw = await this.httpJson(this.apiUrl('/api/content/search-apps'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    const parsed = FetchScreensResponseSchema.parse(raw);
+    // Be tolerant to schema shifts.
+    const value = (raw as any)?.value;
+    const data = (value?.data as any[]) ?? [];
 
-    return parsed.value.data.map((item) => {
-      const titleParts = [...(item.screenPatterns ?? []), ...(item.screenElements ?? [])].filter(Boolean);
-      const title = titleParts.slice(0, 3).join(' · ') || 'Screen';
+    return data.map((item) => {
+      const appName = item.appName ?? 'Unknown App';
+      const appSlug = item.id ? `${slugify(appName)}-${platform}-${item.id}` : undefined;
+      const appVersionId = item.appVersionId;
+      const url =
+        appSlug && appVersionId
+          ? `${this.baseUrl}/apps/${appSlug}/${appVersionId}/screens`
+          : `${this.baseUrl}`;
 
       return {
-        id: item.id,
-        title,
-        appName: item.appName ?? 'Unknown App',
+        id: String(item.id ?? ''),
+        title: item.appTagline ?? 'App',
+        appName,
         platform: normalizePlatform(item.platform),
-        url: `${this.baseUrl}/screens/${item.id}`,
-        thumbUrl: item.screenCdnImgSources?.src ?? item.screenUrl ?? undefined,
-        tags: item.screenPatterns ?? undefined,
+        url,
+        thumbUrl: item.previewScreens?.[0]?.screenUrl ?? item.appLogoUrl ?? undefined,
+        tags: item.keywords ?? undefined,
       };
     });
   }
