@@ -10,11 +10,13 @@ function parseArgs(argv) {
     platform: 'ios',
     limit: 15,
     outDir: null,
+    profile: null,
     resume: true,
+    downloadMode: 'app-screens', // app-screens | shots
     downloadConcurrency: 8,
     downloadTimeoutMs: 15000,
     downloadRetries: 1,
-    downloadProfile: true,
+    downloadTiming: true,
     creative: true,
     creativePerQueryLimit: 10,
     creativeMaxPerApp: 2,
@@ -22,17 +24,21 @@ function parseArgs(argv) {
     verify: true,
     verifyMinScore: 3,
   };
+
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     const next = argv[i + 1];
+
     if (a === '--query' && next) (out.query = next), i++;
     else if (a === '--platform' && next) (out.platform = next), i++;
     else if (a === '--limit' && next) (out.limit = Number(next)), i++;
     else if (a === '--out' && next) (out.outDir = next), i++;
+    else if (a === '--profile' && next) (out.profile = next), i++;
+    else if (a === '--download-mode' && next) (out.downloadMode = next), i++;
     else if (a === '--download-concurrency' && next) (out.downloadConcurrency = Number(next)), i++;
     else if (a === '--download-timeout-ms' && next) (out.downloadTimeoutMs = Number(next)), i++;
     else if (a === '--download-retries' && next) (out.downloadRetries = Number(next)), i++;
-    else if (a === '--no-download-profile') out.downloadProfile = false;
+    else if (a === '--no-download-timing') out.downloadTiming = false;
     else if (a === '--creative') out.creative = true;
     else if (a === '--no-creative') out.creative = false;
     else if (a === '--creative-per-query-limit' && next) (out.creativePerQueryLimit = Number(next)), i++;
@@ -43,45 +49,37 @@ function parseArgs(argv) {
     else if (a === '--no-resume') out.resume = false;
     else if (a === '--help') {
       console.log(`Usage:
-  gather-inspiration.mjs --query "<screenType>" --platform ios --limit 15 --out ./inspiration/mobbin/<screenType> [--no-resume]
-    [--download-concurrency 8] [--download-timeout-ms 15000] [--download-retries 1] [--no-download-profile]
+  gather-inspiration.mjs --query "<screenType>" --platform ios --limit 15 --out ./inspiration/mobbin/<screenType> [--profile default] [--no-resume]
+    [--download-mode app-screens|shots]
+    [--download-concurrency 8] [--download-timeout-ms 15000] [--download-retries 1] [--no-download-timing]
     [--creative|--no-creative] [--creative-per-query-limit 10] [--creative-max-per-app 2]
     [--creative-query-pack "Onboarding,Welcome,Product Tour"]
     [--no-verify] [--verify-min-score 3]
 
 Examples:
-  gather-inspiration.mjs --query "Login" --platform ios --limit 15 --out ./inspiration/mobbin/login
-  gather-inspiration.mjs --query "Onboarding" --platform ios --limit 20 --out ./inspiration/mobbin/onboarding
+  gather-inspiration.mjs --query "Onboarding" --platform ios --limit 15 --out ./inspiration/mobbin/onboarding --profile default
   gather-inspiration.mjs --query "Settings" --platform android --limit 10 --out ./inspiration/mobbin/settings
-  gather-inspiration.mjs --query "Empty State" --platform ios --limit 15 --out ./inspiration/mobbin/empty-state
   gather-inspiration.mjs --query "Onboarding for logging" --platform web --limit 20 --out ./inspiration/mobbin/onboarding-logging
   gather-inspiration.mjs --query "Onboarding" --platform ios --limit 10 --out ./inspiration/mobbin/onboarding-exact --no-creative
-  gather-inspiration.mjs --query "Onboarding" --platform ios --limit 10 --out ./inspiration/mobbin/onboarding-strict --verify-min-score 5
-
-Common screen types:
-  - Authentication: Login, Sign Up, Forgot Password, OTP, SSO
-  - Onboarding: Welcome, Feature Tour, Permissions, Personalization
-  - Navigation: Homepage, Dashboard, Tab Bar, Sidebar
-  - User: Profile, Settings, Account, Preferences
-  - Commerce: Checkout, Cart, Payment, Product Detail
-  - Content: Feed, Search, Filters, Detail View
-  - Communication: Notifications, Messages, Chat, Inbox
-  - States: Empty State, Error, Loading, Success, Offline
+  gather-inspiration.mjs --query "Login" --platform ios --limit 10 --out ./inspiration/mobbin/login-shots --download-mode shots
 `);
       process.exit(0);
     }
   }
 
-  // Validate required args
   if (!out.query) {
     console.error('Error: --query is required. Use --help for usage.');
     process.exit(1);
   }
 
-  // Default outDir based on query if not provided
   if (!out.outDir) {
     const slug = out.query.toLowerCase().replace(/\s+/g, '-');
     out.outDir = `./inspiration/mobbin/${slug}`;
+  }
+
+  if (!['app-screens', 'shots'].includes(out.downloadMode)) {
+    console.error('Error: --download-mode must be app-screens or shots.');
+    process.exit(1);
   }
 
   if (!Number.isInteger(out.downloadConcurrency) || out.downloadConcurrency <= 0) {
@@ -113,7 +111,12 @@ Common screen types:
 }
 
 function sh(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', ...opts });
+  return execFileSync(cmd, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    ...opts,
+    env: { ...process.env, ...(opts.env ?? {}) },
+  });
 }
 
 function ensureDir(p) {
@@ -162,11 +165,11 @@ function writeIndex(outDir, screenType, rows, failures) {
   lines.push('');
   lines.push('## Downloads');
   lines.push('');
-  lines.push('| App | Screen | Local PNG | Notes |');
+  lines.push('| App | Source | Local Path | Notes |');
   lines.push('|---|---|---|---|');
   for (const r of rows) {
     const notes = (r.notes?.length ? r.notes.join('<br>') : '').replaceAll('|', '\\|');
-    lines.push(`| ${r.app.replaceAll('|', '\\|')} | [${r.id}](${r.url}) | ${r.pngPath} | ${notes} |`);
+    lines.push(`| ${r.app.replaceAll('|', '\\|')} | [${r.id}](${r.url}) | ${r.localPath} | ${notes} |`);
   }
 
   if (failures.length) {
@@ -179,22 +182,6 @@ function writeIndex(outDir, screenType, rows, failures) {
   }
 
   fs.writeFileSync(path.join(outDir, 'INDEX.md'), lines.join('\n') + '\n', 'utf8');
-}
-
-function buildDownloadArgs(id, args) {
-  return [
-    'download',
-    id,
-    '--out',
-    args.outDir,
-    '--concurrency',
-    String(args.downloadConcurrency),
-    '--timeout-ms',
-    String(args.downloadTimeoutMs),
-    '--retries',
-    String(args.downloadRetries),
-    ...(args.downloadProfile ? ['--profile'] : []),
-  ];
 }
 
 function dedupeTerms(terms) {
@@ -323,14 +310,14 @@ function annotateAndVerifyCandidates(candidates, args, intent) {
   return { kept: annotated, rejected };
 }
 
-function searchScreens(query, args, limit) {
+function searchScreens(query, args) {
   const json = sh('mobbin', [
     'search',
     query,
     '--platform',
     args.platform,
     '--limit',
-    String(limit),
+    String(args.creative ? args.creativePerQueryLimit : args.limit),
     '--json',
   ]);
   return JSON.parse(json);
@@ -345,7 +332,7 @@ function buildCreativeCandidates(args) {
 
   for (const query of queries) {
     try {
-      const found = searchScreens(query, args, args.creativePerQueryLimit);
+      const found = searchScreens(query, args);
       perQuery.push({ query, count: found.length, ok: true });
       for (const r of found) {
         const existing = byId.get(r.id);
@@ -393,7 +380,6 @@ function pickCreativeResults(candidates, limit, maxPerApp) {
     }
 
     if (!best) {
-      // Relax app cap to avoid getting stuck if not enough apps are present.
       const fallback = pool.find(c => !pickedIds.has(c.id));
       if (!fallback) break;
       best = fallback;
@@ -411,22 +397,89 @@ function pickCreativeResults(candidates, limit, maxPerApp) {
   return selected;
 }
 
+function buildDownloadArgs(result, args) {
+  if (args.downloadMode === 'shots') {
+    return [
+      'shots',
+      'download',
+      result.id,
+      '--out',
+      args.outDir,
+      '--concurrency',
+      String(args.downloadConcurrency),
+      '--timeout-ms',
+      String(args.downloadTimeoutMs),
+      '--retries',
+      String(args.downloadRetries),
+      ...(args.profile ? ['--profile', args.profile] : []),
+      ...(args.downloadTiming ? ['--timing'] : []),
+    ];
+  }
+
+  return [
+    'app',
+    'screens',
+    'download',
+    '--url',
+    result.url,
+    '--out',
+    args.outDir,
+    '--concurrency',
+    String(args.downloadConcurrency),
+    '--timeout-ms',
+    String(args.downloadTimeoutMs),
+    '--retries',
+    String(args.downloadRetries),
+    ...(args.profile ? ['--profile', args.profile] : []),
+    ...(args.downloadTiming ? ['--timing'] : []),
+  ];
+}
+
+function parseDownloadedTo(stdout) {
+  const m = String(stdout).match(/Downloaded to:\s*(.+)$/m);
+  return m?.[1]?.trim() ?? '';
+}
+
+function detectFolderSummary(downloadedTo) {
+  try {
+    const metaPath = path.join(downloadedTo, 'meta.json');
+    if (fs.existsSync(metaPath)) {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      const count = Array.isArray(meta?.screens) ? meta.screens.length : 0;
+      if (count > 0) return `${count} screens`;
+    }
+
+    const files = fs.readdirSync(downloadedTo);
+    const imageCount = files.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f)).length;
+    if (imageCount > 0) return `${imageCount} images`;
+  } catch {
+    // ignore
+  }
+  return 'downloaded';
+}
+
 const args = parseArgs(process.argv);
 ensureDir(args.outDir);
+
+if (args.profile) {
+  process.env.MOBBIN_PROFILE = args.profile;
+}
 
 console.log(`Collecting ${args.query} inspiration...`);
 console.log(`Platform: ${args.platform}, Limit: ${args.limit}`);
 console.log(`Output: ${args.outDir}`);
+console.log(`Profile: ${args.profile ?? '(resolved by mobbin config/env/default)'}`);
 console.log(`Resume: ${args.resume ? 'on' : 'off'}`);
-  console.log(
-    `Download profile: c=${args.downloadConcurrency}, timeout=${args.downloadTimeoutMs}ms, retries=${args.downloadRetries}, profile=${args.downloadProfile ? 'on' : 'off'}`,
-  );
-  if (args.verify) {
-    console.log(`Relevance verification: on (min-score=${args.verifyMinScore})`);
-  } else {
-    console.log('Relevance verification: off');
-  }
-  if (args.creative) {
+console.log(`Download mode: ${args.downloadMode}`);
+console.log(
+  `Download profile: c=${args.downloadConcurrency}, timeout=${args.downloadTimeoutMs}ms, retries=${args.downloadRetries}, timing=${args.downloadTiming ? 'on' : 'off'}`,
+);
+if (args.verify) {
+  console.log(`Relevance verification: on (min-score=${args.verifyMinScore})`);
+} else {
+  console.log('Relevance verification: off');
+}
+if (args.creative) {
   console.log(
     `Creative mode: on (per-query-limit=${args.creativePerQueryLimit}, max-per-app=${args.creativeMaxPerApp})`,
   );
@@ -435,10 +488,11 @@ console.log('');
 
 // 1) Auth check
 try {
-  sh('mobbin', ['whoami']);
+  const authArgs = ['auth', 'status', ...(args.profile ? ['--profile', args.profile] : [])];
+  sh('mobbin', authArgs);
   console.log('✓ Authenticated with Mobbin');
 } catch (e) {
-  console.error('✗ Not logged in. Run: mobbin login');
+  console.error('✗ Not logged in. Run: mobbin auth login' + (args.profile ? ` --profile ${args.profile}` : ''));
   process.exit(1);
 }
 
@@ -451,7 +505,9 @@ try {
     console.log(`Creative search for "${args.query}"...`);
     const collected = buildCreativeCandidates(args);
     const verified = annotateAndVerifyCandidates(collected.candidates, args, intent);
-    const pool = verified.kept.length ? verified.kept : collected.candidates.map(c => ({ ...c, relevance: computeRelevance(c, args.query, intent) }));
+    const pool = verified.kept.length
+      ? verified.kept
+      : collected.candidates.map(c => ({ ...c, relevance: computeRelevance(c, args.query, intent) }));
     results = pickCreativeResults(pool, args.limit, args.creativeMaxPerApp);
     creativeMeta = {
       mode: 'creative',
@@ -468,6 +524,7 @@ try {
         id: r.id,
         appName: r.appName,
         title: r.title,
+        url: r.url,
         matchedQueries: r.matchedQueries ?? [],
         creativityScore: r.creativityScore ?? 0,
         relevanceScore: r.relevance?.score ?? 0,
@@ -477,9 +534,21 @@ try {
     console.log(`✓ Creative mode selected ${results.length} screens from ${collected.candidates.length} candidates (verified pool ${pool.length})`);
   } else {
     console.log(`Searching for "${args.query}" screens...`);
-    const strictResults = searchScreens(args.query, args, args.limit);
+    const strictResults = JSON.parse(
+      sh('mobbin', [
+        'search',
+        args.query,
+        '--platform',
+        args.platform,
+        '--limit',
+        String(args.limit),
+        '--json',
+      ]),
+    );
     const verified = annotateAndVerifyCandidates(strictResults, args, intent);
-    results = verified.kept.length ? verified.kept : strictResults.map(c => ({ ...c, relevance: computeRelevance(c, args.query, intent) }));
+    results = verified.kept.length
+      ? verified.kept
+      : strictResults.map(c => ({ ...c, relevance: computeRelevance(c, args.query, intent) }));
     console.log(`✓ Found ${results.length} screens`);
   }
 } catch (e) {
@@ -487,30 +556,31 @@ try {
   process.exit(1);
 }
 
-// Log IDs before download (for visibility and resume)
 console.log('');
-console.log('Screen IDs:');
+console.log('Candidates:');
 for (const r of results) {
   const app = r.appName ?? 'Unknown App';
+  const target = args.downloadMode === 'app-screens' ? (r.url ?? '(missing-url)') : r.id;
   const creativeSuffix = args.creative
     ? ` | score=${r.creativityScore ?? 0} | relevance=${r.relevance?.score ?? 0} | queries=${(r.matchedQueries ?? []).join(', ')}`
     : '';
-  console.log(`  - ${app} : ${r.id}${creativeSuffix}`);
+  console.log(`  - ${app} : ${target}${creativeSuffix}`);
 }
 
 const state = args.resume ? loadState(args.outDir) : { downloaded: new Set(), rows: [], failures: [] };
 if (!args.resume) {
   try {
     fs.rmSync(statePath(args.outDir), { force: true });
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
-// 3) Download each id
 const rows = state.rows;
 const failures = state.failures;
 
 console.log('');
-console.log('Downloading screens...');
+console.log('Downloading...');
 
 for (const r of results) {
   const id = r.id;
@@ -522,56 +592,60 @@ for (const r of results) {
     continue;
   }
 
-  let downloadedTo = '';
-  try {
-    // capture stdout to parse the output directory
-    const out = sh('mobbin', buildDownloadArgs(id, args));
-    const m = out.match(/Downloaded to:\s*(.+)$/m);
-    downloadedTo = m?.[1]?.trim() ?? '';
+  if (args.downloadMode === 'app-screens' && !r.url) {
+    failures.push({ app, id, error: 'Missing app screens URL in search result' });
+    saveState(args.outDir, state);
+    console.log(`  ✗ ${app} — missing app screens URL`);
+    continue;
+  }
 
-    // Best effort: assume single-screen downloads => 01.png
-    const pngPath = downloadedTo ? path.join(downloadedTo, '01.png') : '';
+  let downloadedTo = '';
+
+  try {
+    const out = sh('mobbin', buildDownloadArgs(r, args));
+    downloadedTo = parseDownloadedTo(out);
+
+    const summary = downloadedTo ? detectFolderSummary(downloadedTo) : 'downloaded';
 
     rows.push({
       app,
       id,
       url,
-      pngPath: pngPath ? `\`${pngPath}\`` : '`(unknown)`',
+      localPath: downloadedTo ? `\`${downloadedTo}\`` : '`(unknown)`',
       notes: [
-        ...(args.creative && r.matchedQueries?.length
-          ? [`Matched queries: ${r.matchedQueries.join(', ')}`]
-          : []),
-        ...(args.creative && typeof r.creativityScore === 'number'
-          ? [`Creativity score: ${r.creativityScore}`]
-          : []),
+        `Mode: ${args.downloadMode}`,
+        `Summary: ${summary}`,
+        ...(args.creative && r.matchedQueries?.length ? [`Matched queries: ${r.matchedQueries.join(', ')}`] : []),
+        ...(args.creative && typeof r.creativityScore === 'number' ? [`Creativity score: ${r.creativityScore}`] : []),
         ...(typeof r.relevance?.score === 'number' ? [`Relevance score: ${r.relevance.score}`] : []),
       ],
     });
+
     state.downloaded.add(id);
     saveState(args.outDir, state);
     console.log(`  ✓ ${app}`);
   } catch (e) {
-    // retry once
     try {
-      const out = sh('mobbin', buildDownloadArgs(id, args));
-      const m = out.match(/Downloaded to:\s*(.+)$/m);
-      downloadedTo = m?.[1]?.trim() ?? '';
-      const pngPath = downloadedTo ? path.join(downloadedTo, '01.png') : '';
+      const out = sh('mobbin', buildDownloadArgs(r, args));
+      downloadedTo = parseDownloadedTo(out);
+
+      const summary = downloadedTo ? detectFolderSummary(downloadedTo) : 'downloaded';
+
       rows.push({
         app,
         id,
         url,
-        pngPath: pngPath ? `\`${pngPath}\`` : '`(unknown)`',
+        localPath: downloadedTo ? `\`${downloadedTo}\`` : '`(unknown)`',
         notes: [
-          ...(args.creative && r.matchedQueries?.length
-            ? [`Matched queries: ${r.matchedQueries.join(', ')}`]
-            : []),
-          ...(args.creative && typeof r.creativityScore === 'number'
-            ? [`Creativity score: ${r.creativityScore}`]
-            : []),
+          `Mode: ${args.downloadMode}`,
+          `Summary: ${summary}`,
+          'Recovered on retry',
+          ...(args.creative && r.matchedQueries?.length ? [`Matched queries: ${r.matchedQueries.join(', ')}`] : []),
+          ...(args.creative && typeof r.creativityScore === 'number' ? [`Creativity score: ${r.creativityScore}`] : []),
           ...(typeof r.relevance?.score === 'number' ? [`Relevance score: ${r.relevance.score}`] : []),
         ],
       });
+
       state.downloaded.add(id);
       saveState(args.outDir, state);
       console.log(`  ✓ ${app} (retry)`);
@@ -585,7 +659,7 @@ for (const r of results) {
 
 writeIndex(args.outDir, args.query, rows, failures);
 console.log('');
-console.log(`✓ Done! Downloaded ${rows.length}/${results.length} screens`);
+console.log(`✓ Done! Downloaded ${rows.length}/${results.length} entries`);
 console.log(`  Index: ${path.join(args.outDir, 'INDEX.md')}`);
 if (creativeMeta) {
   console.log(`  Creative search details: ${path.join(args.outDir, 'creative-searches.json')}`);
